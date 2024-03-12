@@ -28,19 +28,10 @@ mct <- function(df, varname_wbal, varname_date, thresh_terminate = 0.0, thresh_d
       iidx <- idx
       done_finding_dropday <- FALSE
 
-      # ## xxx debug
-      # newlargeinst <- TRUE
-
       ## continue accumulating deficit as long as the deficit has not fallen below (thresh_terminate) times the maximum deficit attained in this event
       while (iidx <= (nrow(df)-1) && (deficit - df[[ varname_wbal ]][iidx] > thresh_terminate * max_deficit)){
         dday <- dday + 1
         deficit <- deficit - df[[ varname_wbal ]][iidx]
-
-        # ## xxx debug
-        # if (newlargeinst && deficit>50){
-        #   print("entering large deficit...")
-        #   newlargeinst <- FALSE
-        # }
 
         ## record the maximum deficit attained in this event
         if (deficit > max_deficit){
@@ -54,7 +45,7 @@ mct <- function(df, varname_wbal, varname_date, thresh_terminate = 0.0, thresh_d
           done_finding_dropday <- TRUE
         }
 
-        ## once, deficit has fallen below threshold, all subsequent dates are dropped (dday set to NA)
+        ## once deficit has fallen below threshold, all subsequent dates are dropped (dday set to NA)
         if (done_finding_dropday){
           df$iinst[iidx] <- NA
           df$dday[iidx]  <- NA
@@ -64,27 +55,11 @@ mct <- function(df, varname_wbal, varname_date, thresh_terminate = 0.0, thresh_d
           iidx_drop <- iidx
         }
 
-        # ## (even before "drop-day" is found), drop data of days after rain, i.e., where current CWD is below the maximum (previously) attained in the same event
-        # if (deficit < max_deficit){
-        #   df$iinst[iidx] <- NA
-        #   df$dday[iidx]  <- NA
-        #   df$deficit[iidx] <- NA
-        # } else {
-        #   df$iinst[iidx] <- iinst
-        #   df$dday[iidx]  <- dday
-        #   df$deficit[iidx] <- deficit
-        # }
-
         df$deficit[iidx] <- deficit
 
         iidx <- iidx + 1
 
       }
-
-      # ## xxx debug
-      # if (!newlargeinst){
-      #   print("crucial moment")
-      # }
 
       ## record instance
       this_inst <- tibble( idx_start = idx, len = iidx_drop-idx, iinst = iinst, date_start=df[[varname_date]][idx], date_end = df[[varname_date]][iidx_drop-1], deficit = max_deficit )
@@ -98,5 +73,4 @@ mct <- function(df, varname_wbal, varname_date, thresh_terminate = 0.0, thresh_d
 
   }
   return(df=df)
-  # return( list(inst=inst, df=df))
 }

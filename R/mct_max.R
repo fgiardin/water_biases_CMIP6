@@ -1,5 +1,5 @@
 mct_max <- function(df, varname_wbal, varname_date) {
-  # Ensure that the data is sorted by date in ascending order
+  # make sure that the data is sorted by date in ascending order
   df <- df[order(df[[varname_date]]), ]
 
   # Calculate the cumulative water deficit (CWD) for the entire timeseries

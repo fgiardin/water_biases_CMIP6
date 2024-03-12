@@ -10,7 +10,7 @@ library(data.table)
 
 process_daily_cmip6 <- function(model_name) {
 
-  # DParent directory where all the daily model data are
+  # Parent directory where all the daily model data are
   path_prefix <- "data-raw/cmip6-ng/DAILY/"
 
   # Load model-specific data
@@ -32,7 +32,7 @@ process_daily_cmip6 <- function(model_name) {
   rm(EF_model)
   rm(SM_model)
 
-  # convert to SpatRasters (to check values --> they're all the same, e.g error in extracting data)
+  # convert to SpatRasters
   str(EF_array) # lon and lat are inverted --> transpose matrix
   EF_array <- aperm(EF_array, c(2, 1, 3)) # switch second and first dimensions, so that it can easily be read with package terra!
   SM_array <- aperm(SM_array, c(2, 1, 3))
@@ -67,9 +67,6 @@ process_daily_cmip6 <- function(model_name) {
   values(EF_rast) <- EF_array
   values(SM_rast) <- SM_array
   values(Rn_rast) <- Rn_array
-
-  # # remove outliers in EF_rast --> do this later after filtering flux points (faster!)
-  # EF_rast <- ifel(EF_rast < 0, NA, ifel(EF_rast > 1.5, NA, EF_rast))
 
   # set dates
   time(EF_rast) <- dates

@@ -3,11 +3,6 @@
 
 fit_bilinear_from_combination <- function(combination, split_data, y_var, x_var) {
 
-  # to run manually
-  # combination <- combinations_dt[3]
-  # y_var <- "SIF_over_SIFmax"
-  # x_var <- "TWS_norm"
-
   # Get the column names of the "combination" dataframe
   col_names <- colnames(combination)
 
@@ -29,7 +24,7 @@ fit_bilinear_from_combination <- function(combination, split_data, y_var, x_var)
 
   # don't fit segmented regression if there's not enough data available at that location
   # trade off between having enough points so that the function can find a meaningful break point and not excluding too many cells on global grid
-  if (nrow(subset_data) < 25) { # FYI - different models may have different points with not enough data, because the Rn > 75 filter depends on the Rn of the specific model
+  if (nrow(subset_data) < 25) {
 
     cat("Not enough data for model:", combination$model[[1]], "lat:", combination$lat[[1]], "lon:", combination$lon[[1]], "\n")
 

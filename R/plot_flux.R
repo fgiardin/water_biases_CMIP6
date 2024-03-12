@@ -1,5 +1,5 @@
 
-# function to plot EF vs SM at a specific location (flux sites mostly)
+# function to plot EF vs SM at a specific location (FLUXNET2015 site locations)
 
 library(ggplot2)
 library(dplyr)
@@ -32,10 +32,6 @@ plot_flux <- function(df, site_name) {
     scale_y_continuous(breaks = seq(0, 1.4, 0.2), limits = c(0, 1.5), expand = c(0, 0)) +
     scale_x_continuous(breaks = seq(0, 1, 0.2), limits = c(0, 1), expand = c(0, 0))
 
-    # scale_y_continuous(breaks = seq(0, 1, 0.25), limits = c(-0.1, 1.05), expand = c(0, 0)) +
-    # scale_x_continuous(breaks = seq(0, 1, 0.25), limits = c(-0.05, 1.05), expand = c(0, 0))
-
-
     # plot the segments (results of bilinear regression) only if provided in original df
     if (all(c("theta_crit", "Intercept", "Slope") %in% names(df_site))) {
       p <- p +
@@ -66,9 +62,6 @@ plot_flux <- function(df, site_name) {
                vjust = 1.1,
                size = 4.4, color = "black")
   }
-
-
-
 
   return(p)
 }
