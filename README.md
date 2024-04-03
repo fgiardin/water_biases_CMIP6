@@ -3,6 +3,7 @@
 
 # Dry biases in land water storage and excessive soil moisture limitation in CMIP6 models
 This repository provides code and intermediary data to reproduce the analysis of the abovementioned project. For full details on the methodology and results please refer to the 'manuscript' folder. For a step-by-step guide on how to reproduce the analysis, refer to the 'Instructions' below. 
+
 All code is licensed under AGPL-v3, and the manuscript and data are licensed as CC-BY. Please review the individual directories and their LICENSE file for more information. You can cite the code in this repository as follows:
 
 > Giardina et al. (2024). Dry biases in land water storage and excessive soil moisture limitation in CMIP6 models: code and intermediary data [https://doi.org/10.5281/zenodo.10810324]( https://doi.org/10.5281/zenodo.10810324)
