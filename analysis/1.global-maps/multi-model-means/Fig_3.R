@@ -16,6 +16,7 @@ library(ggpubr)
 sf_use_s2(FALSE) # switch off spherical geometry
 library(data.table)
 library(RColorBrewer)
+setwd("/Users/fgiardina/water_biases_CMIP6")
 
 # load data
 df_count_GRACE <- readRDS("data/theta_crit/monthly/df_count_GRACE.rds") %>%
@@ -103,6 +104,20 @@ summary_merged <- full_join(dt_count_MMmeans, # remove GRACE in the original dat
                             grace_data, by = join_by(lon, lat),
                             suffix = c("", "_GRACE")) # rename new column "medianSMmax" + "_GRACE"
 
+# calculate WEIGHTS for the bias (to account for spherical coordinates)
+res <- 2.5 # resolution in degrees
+ref_grid_size <- sin(res * pi / 180) # calculate reference grid size using the sine of resolution converted to radians
+summary_merged <- summary_merged %>% # Add weights to the summary_merged dataframe
+  mutate(
+    lat1 = lat - (res / 2),  # Calculate the southern boundary of the grid cell
+    lat2 = lat + (res / 2),  # Calculate the northern boundary of the grid cell
+    gridsize = abs(sin(lat1 * pi / 180) - sin(lat2 * pi / 180)),  # Grid cell size based on sine of latitude boundaries
+    weights = gridsize / ref_grid_size  # Normalize weights by the reference grid size
+  ) %>%
+  dplyr::select(-lat1, -lat2, -gridsize)  # Clean up by removing intermediate columns
+
+# saveRDS(summary_merged, "summary_merged_fig3.rds", compress = "xz")
+
 # create the list of models to print
 sorted_models <- c("Observations", "Multi-model mean")
 
@@ -119,19 +134,30 @@ plot_list <- lapply(sorted_models, function(model) {
     r_squared <- summary(fit)$r.squared
     r_squared_label <- bquote(italic(R)^2 == .(round(r_squared, 2)))
 
-    # calculate abs(mean bias)
+    # calculate abs(mean bias) using weights
     mean_bias_abs <- df_model %>%
-      mutate(mean_bias_abs = abs(count - count_GRACE)) %>%
-      pull(mean_bias_abs) %>%
-      mean(na.rm = TRUE)
-    mean_bias_abs_label <- bquote("|Bias|" == .(round(mean_bias_abs, 2)) ~ "(%)")
+      filter(!is.na(count) & !is.na(count_GRACE) & !is.na(weights)) %>% # manually remove NAs when using "sum" (num and den should have same number of elements)
+      mutate(mean_bias_abs = abs(count - count_GRACE) * weights) %>%
+      summarise(weighted_mean_bias_abs = sum(mean_bias_abs, na.rm = TRUE) / sum(weights), na.rm = TRUE) %>%
+      pull(weighted_mean_bias_abs)
+    mean_bias_abs_label <- bquote("|Bias|" == .(round(mean_bias_abs, 0)) * "%")
 
-    # calculate mean bias
+    # calculate mean bias using weights
     mean_bias <- df_model %>%
-      mutate(mean_bias = count - count_GRACE) %>%
-      pull(mean_bias) %>%
-      mean(na.rm = TRUE)
-    mean_bias_label <- bquote("Bias" == .(round(mean_bias, 2)) ~ "(%)")
+      filter(!is.na(count) & !is.na(count_GRACE) & !is.na(weights)) %>%
+      mutate(mean_bias = (count - count_GRACE) * weights) %>%
+      summarise(weighted_mean_bias = sum(mean_bias, na.rm = TRUE) / sum(weights), na.rm = TRUE) %>%
+      pull(weighted_mean_bias)
+    mean_bias_label <- bquote("Bias" == .(round(mean_bias, 0)) * "%")
+
+    # bias focusing on tropics
+    mean_bias_tropics <- df_model %>%
+      filter(lat >= -23 & lat <= 23) %>%
+      filter(!is.na(count) & !is.na(count_GRACE) & !is.na(weights)) %>%
+      mutate(mean_bias = (count - count_GRACE) * weights) %>%
+      summarise(weighted_mean_bias = sum(mean_bias, na.rm = TRUE) / sum(weights, na.rm = TRUE)) %>%
+      pull(weighted_mean_bias)
+    mean_bias_tropics_label <- bquote(Bias[tropics] == .(round(mean_bias_tropics, 0)) * "%")
   }
 
   # Plot global map for each model
@@ -192,9 +218,10 @@ plot_list <- lapply(sorted_models, function(model) {
   # add stats for models
   if(model != "Observations") {
     p <- p +
-      annotate("text", x = -175, y = -25, label = r_squared_label, hjust = 0, vjust = 0, size = 4.3) + # R2
-      annotate("text", x = -175, y = -40, label = mean_bias_label, hjust = 0, vjust = 0, size = 4.3) + # mean bias
-      annotate("text", x = -175, y = -55, label = mean_bias_abs_label, hjust = 0, vjust = 0, size = 4.3) # abs(mean bias)
+      annotate("text", x = -175, y = -11, label = r_squared_label, hjust = 0, vjust = 0, size = 4.3) + # R2
+      annotate("text", x = -175, y = -25, label = mean_bias_label, hjust = 0, vjust = 0, size = 4.3) + # mean bias
+      annotate("text", x = -175, y = -40, label = mean_bias_tropics_label, hjust = 0, vjust = 0, size = 4.3) + # tropics
+      annotate("text", x = -175, y = -52, label = mean_bias_abs_label, hjust = 0, vjust = 0, size = 4.3) # abs(mean bias)
   }
 
   return(p)

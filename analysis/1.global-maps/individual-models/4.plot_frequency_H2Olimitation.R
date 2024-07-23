@@ -93,6 +93,19 @@ summary_merged <- full_join(dt_count, # remove GRACE in the original dataframe t
                             grace_data, by = join_by(lon, lat),
                             suffix = c("", "_GRACE")) # rename new column "medianSMmax" + "_GRACE"
 
+
+# calculate WEIGHTS for the bias (to account for spherical coordinates)
+res <- 2.5 # resolution in degrees
+ref_grid_size <- sin(res * pi / 180) # calculate reference grid size using the sine of resolution converted to radians
+summary_merged <- summary_merged %>% # Add weights to the summary_merged dataframe
+  mutate(
+    lat1 = lat - (res / 2),  # Calculate the southern boundary of the grid cell
+    lat2 = lat + (res / 2),  # Calculate the northern boundary of the grid cell
+    gridsize = abs(sin(lat1 * pi / 180) - sin(lat2 * pi / 180)),  # Grid cell size based on sine of latitude boundaries
+    weights = gridsize / ref_grid_size  # Normalize weights by the reference grid size
+  ) %>%
+  dplyr::select(-lat1, -lat2, -gridsize)  # Clean up by removing intermediate columns
+
 # Create separate plots for each model
 plot_list <- lapply(sorted_models, function(model) {
 
@@ -106,19 +119,21 @@ plot_list <- lapply(sorted_models, function(model) {
     r_squared <- summary(fit)$r.squared
     r_squared_label <- bquote(italic(R)^2 == .(round(r_squared, 2)))
 
-    # calculate abs(mean bias)
+    # calculate abs(mean bias) using weights
     mean_bias_abs <- df_model %>%
-      mutate(mean_bias_abs = abs(count - count_GRACE)) %>%
-      pull(mean_bias_abs) %>%
-      mean(na.rm = TRUE)
-    mean_bias_abs_label <- bquote("|Bias|" == .(round(mean_bias_abs, 2)) ~ "(%)")
+      filter(!is.na(count) & !is.na(count_GRACE) & !is.na(weights)) %>% # manually remove NAs when using "sum" (num and den should have same number of elements)
+      mutate(mean_bias_abs = abs(count - count_GRACE) * weights) %>%
+      summarise(weighted_mean_bias_abs = sum(mean_bias_abs, na.rm = TRUE) / sum(weights), na.rm = TRUE) %>%
+      pull(weighted_mean_bias_abs)
+    mean_bias_abs_label <- bquote("|Bias|" == .(round(mean_bias_abs, 0)) * "%")
 
-    # calculate mean bias
+    # calculate mean bias using weights
     mean_bias <- df_model %>%
-      mutate(mean_bias = count - count_GRACE) %>%
-      pull(mean_bias) %>%
-      mean(na.rm = TRUE)
-    mean_bias_label <- bquote("Bias" == .(round(mean_bias, 2)) ~ "(%)")
+      filter(!is.na(count) & !is.na(count_GRACE) & !is.na(weights)) %>%
+      mutate(mean_bias = (count - count_GRACE) * weights) %>%
+      summarise(weighted_mean_bias = sum(mean_bias, na.rm = TRUE) / sum(weights), na.rm = TRUE) %>%
+      pull(weighted_mean_bias)
+    mean_bias_label <- bquote("Bias" == .(round(mean_bias, 0)) * "%")
   }
 
   # Plot global map for each model
