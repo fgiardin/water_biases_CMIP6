@@ -1,5 +1,5 @@
 [![DOI](https://zenodo.org/badge/770497573.svg)](https://zenodo.org/doi/10.5281/zenodo.10810324)
-# Biases in active land water storage capacity and its limitation of evapotranspiration in CMIP6 models
+# Biases in active land water storage capacity and water limitation of evapotranspiration in CMIP6 models
 This repository provides code and intermediary data to reproduce the analysis of the abovementioned project. For full details on the methodology and results please refer to the 'manuscript' folder. For a step-by-step guide on how to reproduce the analysis, refer to the 'Instructions' below.
 
 All code is licensed under AGPL-v3, and the manuscript and data are licensed as CC-BY. Please review the individual directories and their LICENSE file for more information. You can cite the code in this repository as follows:
