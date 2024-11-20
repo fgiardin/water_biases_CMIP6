@@ -1,7 +1,7 @@
 # script to calculate deltaSM for every year in every grid cell and
 # then take the maximum deltaSM over the entire period
 
-# the code was run in paralle on a local machine, but can be also run on a HPC
+# the code was run in parallel on a local machine, but can be also run on a HPC
 # given the size of the raw data, we didn't upload it on this repo.
 # please refer to the "Data availability statement" in the paper to download the data
 
@@ -27,7 +27,10 @@ model_names <- c("CESM2",
                  "UKESM1-0-LL",
                  "CNRM-ESM2-1",
                  "E3SM-1-1",
-                 "CMCC-ESM2")
+                 "CMCC-ESM2",
+                 "CNRM-CM6-1",
+                 "MIROC6"
+                 )
 
 # Use lapply to process data for each model
 mclapply(model_names, function(model_name) {
@@ -37,8 +40,8 @@ mclapply(model_names, function(model_name) {
   # extract data from netCDFs
 
   # load the data
-  if (model_name %in% c("CNRM-ESM2-1", "UKESM1-0-LL")) {
-    # "CNRM-ESM2-1" and "UKESM1-0-LL": use realization "r1i1p1f2" ("r1i1p1f1" not available)
+  if (model_name %in% c("CNRM-CM6-1", "CNRM-ESM2-1", "UKESM1-0-LL")) {
+    # CNRM-CM6-1, CNRM-ESM2-1 and UKESM1-0-LL: use realization "r1i1p1f2" ("r1i1p1f1" not available)
     mrso_raw <- rast(paste0("data-raw/cmip6-ng/mrso/mon/g025/mrso_mon_", model_name, "_land-hist_r1i1p1f2_g025.nc"))
 
   } else if (model_name == "E3SM-1-1") {
@@ -46,7 +49,7 @@ mclapply(model_names, function(model_name) {
     mrso_raw <- rast(paste0("data-raw/cmip6-ng/mrso/mon/g025/mrso_mon_", model_name, "_land-hist_r1i1p11f1_g025.nc"))
 
   } else {
-    # for all other models use relization "r1i1p1f1"
+    # for all other models use realization "r1i1p1f1"
     mrso_raw <- rast(paste0("data-raw/cmip6-ng/mrso/mon/g025/mrso_mon_", model_name, "_land-hist_r1i1p1f1_g025.nc"))
   }
 
