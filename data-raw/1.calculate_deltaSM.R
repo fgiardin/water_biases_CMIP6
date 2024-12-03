@@ -1,6 +1,8 @@
 # script to calculate deltaSM for every year in every grid cell and
 # then take the maximum deltaSM over the entire period
 
+## !!! may need to update to Future/Furrr libraries instead of parallel
+
 # the code was run in parallel on a local machine, but can be also run on a HPC
 # given the size of the raw data, we didn't upload it on this repo.
 # please refer to the "Data availability statement" in the paper to download the data
@@ -17,119 +19,33 @@ library(ncdf4.helpers)
 
 # CMIP6 -------------------------------------------------------------------
 
+# Define model names and scenario types
+model_names <- c(
+  "CESM2",
+  "EC-Earth3-Veg",
+  "IPSL-CM6A-LR",
+  "UKESM1-0-LL",
+  "CNRM-ESM2-1",
+  "E3SM-1-1",
+  "CMCC-ESM2",
+  "CNRM-CM6-1",
+  "MIROC6"
+)
+
+scenario_types <- c("land-hist", "historical")
+
 # Use mclapply for parallel processing (locally)
 num_cores <- detectCores() - 1 # Get the number of available cores
 
-# Define model names
-model_names <- c("CESM2",
-                 "EC-Earth3-Veg",
-                 "IPSL-CM6A-LR",
-                 "UKESM1-0-LL",
-                 "CNRM-ESM2-1",
-                 "E3SM-1-1",
-                 "CMCC-ESM2",
-                 "CNRM-CM6-1",
-                 "MIROC6"
-                 )
+# source function to process data consistently
+source("R/process_model_deltaSM.R")
 
-# Use lapply to process data for each model
+# Use mclapply to process data for each model in parallel
 mclapply(model_names, function(model_name) {
-
-  print(model_name)
-
-  # extract data from netCDFs
-
-  # load the data
-  if (model_name %in% c("CNRM-CM6-1", "CNRM-ESM2-1", "UKESM1-0-LL")) {
-    # CNRM-CM6-1, CNRM-ESM2-1 and UKESM1-0-LL: use realization "r1i1p1f2" ("r1i1p1f1" not available)
-    mrso_raw <- rast(paste0("data-raw/cmip6-ng/mrso/mon/g025/mrso_mon_", model_name, "_land-hist_r1i1p1f2_g025.nc"))
-
-  } else if (model_name == "E3SM-1-1") {
-    # "E3SM-1-1": use realization "r1i1p11f1" ("r1i1p1f1" not available)
-    mrso_raw <- rast(paste0("data-raw/cmip6-ng/mrso/mon/g025/mrso_mon_", model_name, "_land-hist_r1i1p11f1_g025.nc"))
-
-  } else {
-    # for all other models use realization "r1i1p1f1"
-    mrso_raw <- rast(paste0("data-raw/cmip6-ng/mrso/mon/g025/mrso_mon_", model_name, "_land-hist_r1i1p1f1_g025.nc"))
+  for (scenario in scenario_types) {
+    process_model_deltaSM(model_name, scenario)
   }
-
-
-  # Only take 1900-2014
-  dates <- terra::time(mrso_raw)
-  selection <- which(dates >= as.POSIXct("2003-01-01")) # match dates with GRACE
-  mrso_model <- subset(mrso_raw, subset = selection)
-
-  # Rotate to true coordinates (-180;180 instead of 0;360)
-  mrso_model <- terra::rotate(mrso_model)
-
-  # Focus on vegetated land
-  land_cover_raw <- rast("data-raw/landcover/landcover_MCD12C1.nc")
-  land_cover <- flip(land_cover_raw[[1]], direction = "vertical")
-  vegetated_land <- ifel(
-    land_cover == 0,
-    NA,
-    ifel(
-      land_cover == 13,
-      NA,
-      ifel(
-        land_cover > 14,
-        NA,
-        land_cover
-      )
-    )
-  )
-  vegetated_land <- resample(vegetated_land, mrso_model)
-  mrso_model <- mask(mrso_model, vegetated_land)
-
-  # Transform to dataframe
-  df_model <- terra::as.data.frame(mrso_model, xy = TRUE)
-  dates <- terra::time(mrso_model)
-
-  names(df_model) <- c("lon", "lat", as.character(dates))
-
-  df_model_long <- df_model %>%
-    data.table() %>%
-    melt(
-      measure.vars = as.character(dates),
-      variable.name = "date",
-      value.name = "mrso"
-    ) %>%
-    mutate(date = lubridate::date(as.character(date)),
-           year = lubridate::year(date))
-
-  # Calculate deltaSM per year per pixel
-  delta_SM <- df_model_long %>%
-    group_by(lon, lat, year) %>%
-    summarise(
-      deltaSM = max(mrso, na.rm = TRUE) - min(mrso, na.rm = TRUE)
-    ) %>%
-    ungroup()
-
-  # In every pixel, calculate the max deltaSM over all years
-  delta_SMmax <- delta_SM %>%
-    group_by(lon, lat) %>%
-    summarise(
-      deltaSMmax = max(deltaSM, na.rm = TRUE)
-    ) %>%
-    ungroup() %>%
-    setDT() # transform to datatable
-
-  # calculate absolute deltaSM (directly max-min for a specific location across all years, maximum amplitude)
-  delta_SMabs <- df_model_long %>%
-    group_by(lon, lat) %>%
-    summarise(
-      deltaSMabs = max(mrso, na.rm = TRUE) - min(mrso, na.rm = TRUE)
-    ) %>%
-    ungroup() %>%
-    setDT() # transform to datatable
-
-  # Merge the two data.tables based on lon and lat
-  merged_data_model <- delta_SMmax[delta_SMabs, nomatch=0, on=.(lon, lat)]
-
-  # Save the results
-  saveRDS(merged_data_model, paste0("deltaSM_", model_name, ".rds"), compress = "xz")
-},
-mc.cores = num_cores)
+}, mc.cores = num_cores)
 
 # GRACE -------------------------------------------------------------------
 dname = "lwe_thickness"
@@ -236,10 +152,5 @@ delta_SM_GRACE_abs <- df_GRACE_long %>%
 merged_data_GRACE <- delta_SMmax_GRACE[delta_SM_GRACE_abs, nomatch=0, on=.(lon, lat)]
 
 saveRDS(merged_data_GRACE, "deltaSM_.GRACE.rds", compress = "xz")
-
-
-
-
-
 
 
