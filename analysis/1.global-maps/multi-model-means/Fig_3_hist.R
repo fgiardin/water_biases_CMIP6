@@ -127,79 +127,69 @@ scenarios <- scenarios[!is.na(scenarios)]
 
 saveRDS(data, "summary_merged.rds", compress = "xz")
 
+
+# Get the list of unique scenarios
+scenarios <- unique(summary_merged$scenario)
+scenarios <- scenarios[!is.na(scenarios)]  # Remove NA if any
+
+# Create the list of panels to print
+model_list <- c("Observations", "Multi-model mean")
+
 # Loop over each scenario
 for (scene in scenarios) {
 
-  print(scene)
-  # keep filtering based on scenario outside of lapply
+  print(paste("Processing scenario:", scene))
+
+  # Filter data for the current scenario
   first_filter <- filter(summary_merged, scenario == scene)
 
-  # Create separate two separate panels for obs and MMMean
-  plot_list <- lapply(sorted_panels, function(model) {
+  # Create separate plots for "Observations" and "Multi-model mean"
+  plot_list <- lapply(model_list, function(current_mdl) {
 
-    print(scene)
-    if (model == "Observations") {
-      df_model <- filter(summary_merged, model_name == model)
+    # Handle "Observations" separately (since it may not have a scenario)
+    if (current_mdl == "Observations") {
+      df_model <- filter(summary_merged, model == current_mdl)
     } else {
-      df_model <- filter(first_filter, model_name == model)
+      df_model <- filter(first_filter, model == current_mdl)
     }
 
-    # Calculate stats to compare models with observations
-    if (model != "Observations") {
+    # Calculate statistics to compare models with observations
+    if (current_mdl != "Observations") {
 
-      # Calculate R squared
-      fit <- lm(count ~ count_GRACE, data = df_model)
+      # Calculate R-squared
+      fit <- lm(max_cwd ~ max_cwd_obs, data = df_model)
       r_squared <- summary(fit)$r.squared
       r_squared_label <- bquote(italic(R)^2 == .(round(r_squared, 2)))
 
       # Calculate absolute mean bias using weights
       mean_bias_abs <- df_model %>%
-        filter(!is.na(count) & !is.na(count_GRACE) & !is.na(weights)) %>%
-        mutate(mean_bias_abs = abs(count - count_GRACE) * weights) %>%
-        summarise(weighted_mean_bias_abs = sum(mean_bias_abs, na.rm = TRUE) / sum(weights), na.rm = TRUE) %>%
+        filter(!is.na(max_cwd) & !is.na(max_cwd_obs) & !is.na(weights)) %>%
+        mutate(mean_bias_abs = abs(max_cwd - max_cwd_obs) * weights) %>%
+        summarise(weighted_mean_bias_abs = sum(mean_bias_abs, na.rm = TRUE) / sum(weights, na.rm = TRUE)) %>%
         pull(weighted_mean_bias_abs)
-      mean_bias_abs_label <- bquote("|Bias|" == .(round(mean_bias_abs, 0)) * "%")
+      mean_bias_abs_label <- bquote("|Bias|" == .(round(mean_bias_abs, 0)) ~ "mm")
 
       # Calculate mean bias using weights
       mean_bias <- df_model %>%
-        filter(!is.na(count) & !is.na(count_GRACE) & !is.na(weights)) %>%
-        mutate(mean_bias = (count - count_GRACE) * weights) %>%
-        summarise(weighted_mean_bias = sum(mean_bias, na.rm = TRUE) / sum(weights), na.rm = TRUE) %>%
-        pull(weighted_mean_bias)
-      mean_bias_label <- bquote("Bias" == .(round(mean_bias, 0)) * "%")
-
-      # Bias focusing on tropics
-      mean_bias_tropics <- df_model %>%
-        filter(lat >= -23 & lat <= 23) %>%
-        filter(!is.na(count) & !is.na(count_GRACE) & !is.na(weights)) %>%
-        mutate(mean_bias = (count - count_GRACE) * weights) %>%
+        filter(!is.na(max_cwd) & !is.na(max_cwd_obs) & !is.na(weights)) %>%
+        mutate(mean_bias = (max_cwd - max_cwd_obs) * weights) %>%
         summarise(weighted_mean_bias = sum(mean_bias, na.rm = TRUE) / sum(weights, na.rm = TRUE)) %>%
         pull(weighted_mean_bias)
-      mean_bias_tropics_label <- bquote(Bias[tropics] == .(round(mean_bias_tropics, 0)) * "%")
+      mean_bias_label <- bquote("Bias" == .(round(mean_bias, 0)) ~ "mm")
     }
 
-    # Plot global map
+    # Plot global map for each model
     p <- ggplot() +
       theme_void() +
       geom_tile(data = df_model,
-                aes(x = lon, y = lat,
-                    color = !!sym(plot_variable), fill = !!sym(plot_variable))) +
+                aes(x = lon, y = lat, color = max_cwd, fill = max_cwd)) +
       geom_sf(data = ocean,
               color = "black",
               linetype = 'solid',
-              fill = background_color,
+              fill = "white",
               size = 1) +
-      # Color scale
-      scale_color_viridis_c(
-        option = "turbo",
-        breaks = breaks,
-        limits = c(lower_threshold, upper_threshold)
-      ) +
-      scale_fill_viridis_c(
-        option = "turbo",
-        breaks = breaks,
-        limits = c(lower_threshold, upper_threshold)
-      ) +
+      scale_color_viridis_c(option = "turbo", limits = c(0, 1000), breaks = breaks) +
+      scale_fill_viridis_c(option = "turbo", limits = c(0, 1000), breaks = breaks) +
       coord_sf(
         xlim = c(-179.999, 179.999),
         ylim = c(-60, 88),
@@ -207,44 +197,50 @@ for (scene in scenarios) {
       theme(
         plot.title = element_text(hjust = 0.5, size = 15),
         legend.text = element_text(color = "black", size = 12),
-        legend.title = element_text(color = "black", size = 15),
+        legend.title = element_text(color = "black", size = 12),
         plot.margin = unit(c(0, -0.3, 0.3, -0.6), 'cm'),
-        legend.key.width = unit(2.5, "cm"),
+        legend.key.width = unit(4, "cm"),
         legend.key.height = unit(0.4, "cm"),
-        panel.border = element_rect(colour = "black", fill = NA, linewidth = 0.5),
-        panel.background = element_rect(fill = background_color, colour = NA)
+        panel.border = element_rect(colour = "black", fill = NA, linewidth = 0.5)
       ) +
-      guides(fill = guide_colourbar(frame.linewidth = 0.5, ticks.linewidth = 0.5, frame.colour = "black", ticks.colour = "black"),
-             color = guide_colourbar(frame.linewidth = 0.5, ticks.linewidth = 0.5, frame.colour = "black", ticks.colour = "black")) +
+      guides(
+        fill = guide_colourbar(frame.linewidth = 0.5, ticks.linewidth = 0.5,
+                               frame.colour = "black", ticks.colour = "black"),
+        color = guide_colourbar(frame.linewidth = 0.5, ticks.linewidth = 0.5,
+                                frame.colour = "black", ticks.colour = "black")
+      ) +
       labs(
-        title = ifelse(model == "Observations", "GOME-2 SIF and GRACE observations", paste0(model, " (", scene, ")")),
-        color = "Frequency of water limitation (%)",
-        fill = "Frequency of water limitation (%)"
+        title = ifelse(current_mdl == "Observations",
+                       "Observations",
+                       paste0(current_mdl, " (", scene, ")")),
+        color = "Max CWD (mm)",
+        fill = "Max CWD (mm)"
       )
 
-    # Add stats for models
-    if (model != "Observations") {
+    # Add statistics annotations for model panels
+    if (current_mdl != "Observations") {
       p <- p +
-        annotate("text", x = -175, y = -11, label = r_squared_label, hjust = 0, vjust = 0, size = 4.3) + # R2
-        annotate("text", x = -175, y = -25, label = mean_bias_label, hjust = 0, vjust = 0, size = 4.3) + # Mean bias
-        annotate("text", x = -175, y = -40, label = mean_bias_tropics_label, hjust = 0, vjust = 0, size = 4.3) + # Tropics
-        annotate("text", x = -175, y = -52, label = mean_bias_abs_label, hjust = 0, vjust = 0, size = 4.3) # Absolute mean bias
+        annotate("text", x = -175, y = -25, label = r_squared_label,
+                 hjust = 0, vjust = 0, size = 4.3) +
+        annotate("text", x = -175, y = -40, label = mean_bias_label,
+                 hjust = 0, vjust = 0, size = 4.3) +
+        annotate("text", x = -175, y = -55, label = mean_bias_abs_label,
+                 hjust = 0, vjust = 0, size = 4.3)
     }
 
     return(p)
   })
 
-  # Arrange and save the plots
-  all <- ggarrange(plotlist = plot_list,
-                   labels = "auto",
-                   ncol = 2, nrow = 1,
-                   common.legend = TRUE,
-                   legend = "bottom")
+  # Arrange and save the plots for the current scenario
+  all <- ggarrange(
+    plotlist = plot_list,
+    labels = NULL,
+    ncol = 2, nrow = 1,
+    common.legend = TRUE,
+    legend = "bottom"
+  )
 
-  filename <- paste0("map_", plot_variable, "_", scene, "_MMmean.png")
-  ggsave(filename, path = "./", width = 12, height = 3.25, dpi = 600)
+  # Define the filename based on the scenario
+  filename <- paste0("map_CWDmax_", scene, "_MMmean.png")
+  ggsave(filename, plot = all, path = "./", width = 12, height = 3.25, dpi = 300)
 }
-
-
-
-

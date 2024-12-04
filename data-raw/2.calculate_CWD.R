@@ -34,22 +34,22 @@ lapply(model_names, function(model_name) {
   if (model_name %in% c("CNRM-ESM2-1", "UKESM1-0-LL")) {
     # "CNRM-ESM2-1" and "UKESM1-0-LL": use realization "r1i1p1f2" ("r1i1p1f1" not available, but they are equivalent)
     ET <- rast(paste0("data-raw/cmip6-ng/evspsbl/mon/g025/evspsbl_mon_", model_name, "_land-hist_r1i1p1f2_g025.nc"))
-    P <- rast(paste0("data-raw/cmip6-ng/pr/mon/pr_mon_", model_name, "_land-hist_r1i1p1f2_g025.nc"))
+    P <- rast(paste0("data-raw/cmip6-ng/pr/mon/g025/pr_mon_", model_name, "_land-hist_r1i1p1f2_g025.nc"))
 
   } else if (model_name == "E3SM-1-1") {
     # "E3SM-1-1": use realization "r1i1p11f1" ("r1i1p11f1" not available, but they are equivalent)
     ET <- rast(paste0("data-raw/cmip6-ng/evspsbl/mon/g025/evspsbl_mon_", model_name, "_land-hist_r1i1p11f1_g025.nc"))
-    P <- rast(paste0("data-raw/cmip6-ng/pr/mon/pr_mon_", model_name, "_land-hist_r1i1p11f1_g025.nc"))
+    P <- rast(paste0("data-raw/cmip6-ng/pr/mon/g025/pr_mon_", model_name, "_land-hist_r1i1p11f1_g025.nc"))
 
   } else if (model_name == "CMCC-ESM2") {
     # "CMCC-ESM2": use precipitation from CESM2 (within "land-hist" it's the same metereological forcing)
     ET <- rast(paste0("data-raw/cmip6-ng/evspsbl/mon/g025/evspsbl_mon_", model_name, "_land-hist_r1i1p1f1_g025.nc"))
-    P <- rast("data-raw/cmip6-ng/pr/mon/pr_mon_CESM2_land-hist_r1i1p1f1_g025.nc")
+    P <- rast("data-raw/cmip6-ng/pr/mon/g025/pr_mon_CESM2_land-hist_r1i1p1f1_g025.nc")
 
   } else {
     # for all other models use relization "r1i1p1f1"
     ET <- rast(paste0("data-raw/cmip6-ng/evspsbl/mon/g025/evspsbl_mon_", model_name, "_land-hist_r1i1p1f1_g025.nc"))
-    P <- rast(paste0("data-raw/cmip6-ng/pr/mon/pr_mon_", model_name, "_land-hist_r1i1p1f1_g025.nc"))
+    P <- rast(paste0("data-raw/cmip6-ng/pr/mon/g025/pr_mon_", model_name, "_land-hist_r1i1p1f1_g025.nc"))
   }
 
   # calculate water balance
