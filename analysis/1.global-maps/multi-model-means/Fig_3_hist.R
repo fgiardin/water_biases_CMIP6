@@ -117,14 +117,6 @@ summary_merged <- summary_merged %>% # Add weights to the summary_merged datafra
   ) %>%
   dplyr::select(-lat1, -lat2, -gridsize)  # Clean up by removing intermediate columns
 
-
-# create the list of panels to print
-sorted_panels <- c("Observations", "Multi-model mean")
-
-# Get the list of unique scenarios
-scenarios <- unique(summary_merged$scenario)
-scenarios <- scenarios[!is.na(scenarios)]
-
 saveRDS(data, "summary_merged.rds", compress = "xz")
 
 

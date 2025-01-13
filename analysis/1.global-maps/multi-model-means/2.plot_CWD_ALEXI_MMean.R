@@ -198,15 +198,10 @@ all <- ggarrange(plotlist = plot_list,
                  common.legend = TRUE, # have just one common legend
                  legend="bottom")
 
-ggsave("map_CWDmax_MMmean.png", path = "./", width = 12, height = 3.25, dpi=300)
+ggsave("map_CWDmax_MMmean.png", path = "./", width = 12, height = 3.25, dpi = 300)
 
 # save plot list for combined plot
 saveRDS(plot_list, "plot_list_CWD.rds", compress = "xz")
-
-
-
-
-
 
 
 

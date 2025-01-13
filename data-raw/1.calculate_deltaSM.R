@@ -96,7 +96,7 @@ plot(GRACE[[1]])
 plot(vegetated_land)
 
 # resample GRACE to match CMIP6
-P <- rast("data-raw/cmip6-ng/pr/mon/pr_mon_CESM2_land-hist_r1i1p1f1_g025.nc")
+P <- rast("data-raw/cmip6-ng/pr/mon/g025/pr_mon_CESM2_land-hist_r1i1p1f1_g025.nc")
 P <- terra::rotate(P)
 GRACE <- terra::resample(GRACE, P[[1]])
 
@@ -114,7 +114,9 @@ df_GRACE_long <- df_GRACE %>% # pivot_longer with data.table (faster)
     value.name = "lwe" # name of the new column where the values will be pivoted to (in this case: the water balance)
   ) %>%
   mutate(date = lubridate::date(as.character(date)),
-         year = lubridate::year(date))
+         year = lubridate::year(date)) %>%
+  dplyr::filter(date >= as.Date("2003-01-01") & date <= as.Date("2014-12-31")) # only take study years (intersection between GRACE and CMIP6)
+
 
 # calculate deltaSM per year per pixel
 delta_SM_GRACE <- df_GRACE_long %>%
@@ -152,5 +154,127 @@ delta_SM_GRACE_abs <- df_GRACE_long %>%
 merged_data_GRACE <- delta_SMmax_GRACE[delta_SM_GRACE_abs, nomatch=0, on=.(lon, lat)]
 
 saveRDS(merged_data_GRACE, "deltaSM_.GRACE.rds", compress = "xz")
+
+
+# GWLS --------------------------------------------------------------------
+
+# # Open the NetCDF file
+# GLWS_nc <- nc_open("data-raw/GLWS/v2.0/0.5deg_lat-lon_1m/original/GLWS_2_0_2003-2019.nc")
+# fillvalue <- ncatt_get(GLWS_nc, "Groundwater", "_FillValue")
+# GLWS_units <- ncatt_get(GLWS_nc, "Soil moisture", "units") #mm
+# names(GLWS_nc$var)
+# names(GLWS_nc$dim)
+# nc_close(GLWS_nc)
+
+# process data
+GWLS_raw_gw <- rast("data-raw/GLWS/v2.0/0.5deg_lat-lon_1m/original/GLWS_2_0_2003-2019.nc", "Groundwater")
+GWLS_raw_sm <- rast("data-raw/GLWS/v2.0/0.5deg_lat-lon_1m/original/GLWS_2_0_2003-2019.nc", "Soil moisture")
+GWLS_positive_gw <- classify(GWLS_raw_gw, rcl = matrix(c(-Inf, 0, NA), ncol = 3, byrow = TRUE))
+GWLS_positive_sm <- classify(GWLS_raw_sm, rcl = matrix(c(-Inf, 0, NA), ncol = 3, byrow = TRUE))
+
+# plot(GWLS_raw_gw[[122]])
+# plot(GWLS_positive_gw[[122]])
+# plot(GWLS_raw_sm[[176]])
+
+GWLS_raw <- GWLS_positive_gw + GWLS_positive_sm
+
+# plot(GWLS_raw[[176]])
+
+
+# focus on vegetated land
+land_cover_raw <- rast("data-raw/landcover/landcover_MCD12C1.nc") # load land cover
+land_cover <- flip(land_cover_raw[[1]], # select correct layer (year: 2018)
+                   direction="vertical") # flip it vertically
+vegetated_land <- ifel( # only keep vegetated land
+  land_cover == 0,
+  NA,
+  ifel(
+    land_cover == 13, # 13 = Urban and Built-up Lands
+    NA,
+    ifel(
+      land_cover > 14, # 14 = Cropland/Natural Vegetation Mosaics (keep)
+      NA,              # 15 = Permanent Snow and Ice, 16 = Barren
+      land_cover
+    )
+  )
+)
+
+GWLS <- GWLS_raw
+vegetated_land <- resample(vegetated_land, GWLS) # resample land_cover to match water_balance
+GWLS <- mask(GWLS, vegetated_land) # remove all pixels that are NAs in land_cover
+GWLS
+plot(GWLS[[1]])
+plot(vegetated_land)
+
+# resample GWLS to match CMIP6
+P <- rast("data-raw/cmip6-ng/pr/mon/g025/pr_mon_CESM2_land-hist_r1i1p1f1_g025.nc")
+P <- terra::rotate(P)
+GWLS <- terra::resample(GWLS, P[[1]])
+plot(GWLS[[1]])
+
+# transform to dataframe
+df_GWLS <- terra::as.data.frame(GWLS, xy = TRUE) # xy =TRUE keeps the spatial coordinates
+dates <- seq(as.Date("2003-01-01"), as.Date("2019-12-01"), by = "month") # create vector of dates
+
+names(df_GWLS) <- c("lon", "lat", as.character(dates))
+
+df_GWLS_long <- df_GWLS %>% # pivot_longer with data.table (faster)
+  data.table() %>%
+  melt(
+    measure.vars = as.character(dates), # name of the columns to be pivoted
+    variable.name = "date", # name of the new column where the former column names will be pivoted to (in this case: the dates)
+    value.name = "lwe" # name of the new column where the values will be pivoted to (in this case: the water balance)
+  ) %>%
+  mutate(date = lubridate::date(as.character(date)),
+         year = lubridate::year(date)) %>%
+  dplyr::filter(date >= as.Date("2003-01-01") & date <= as.Date("2014-12-31")) # only take study years (to match CMIP6 and GRACE)
+
+# calculate deltaSM per year per pixel
+delta_SM_GWLS <- df_GWLS_long %>%
+  group_by(lon, lat, year) %>%
+  summarise(
+    deltaSM = max(lwe, na.rm = TRUE) - min(lwe, na.rm = TRUE)
+  ) %>%
+  ungroup()
+
+# in every pixel, calculate the max deltaSM over all years
+delta_SMmax_GWLS <- delta_SM_GWLS %>%
+  group_by(lon, lat) %>%
+  summarise(
+    deltaSMmax = max(deltaSM, na.rm = TRUE)
+  ) %>%
+  ungroup() %>%
+  mutate(
+    deltaSMmax = deltaSMmax * 10 # convert cm to mm
+  ) %>%
+  setDT() # transform to datatable
+
+# calculate absolute deltaSM (directly max-min for a specific location across all years, maximum amplitude)
+delta_SM_GWLS_abs <- df_GWLS_long %>%
+  group_by(lon, lat) %>%
+  summarise(
+    deltaSMabs = max(lwe, na.rm = TRUE) - min(lwe, na.rm = TRUE)
+  ) %>%
+  ungroup() %>%
+  mutate(
+    deltaSMabs = deltaSMabs * 10 # convert cm to mm
+  ) %>%
+  setDT() # transform to datatable
+
+# Merge the two data.tables based on lon and lat
+merged_data_GWLS <- delta_SMmax_GWLS[delta_SM_GWLS_abs, nomatch=0, on=.(lon, lat)]
+
+merged_data_GWLS <- merged_data_GWLS %>%
+  mutate(deltaSMmax = deltaSMmax/10,
+         deltaSMabs = deltaSMabs/10
+         )
+
+saveRDS(merged_data_GWLS, "deltaSM_GWLS.rds", compress = "xz")
+
+
+
+
+
+
 
 

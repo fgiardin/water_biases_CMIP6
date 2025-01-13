@@ -63,9 +63,6 @@ min_max_values <- summary_CWD %>%
 # Define the desired breaks for the color scale (0 to 1000 by 100)
 breaks <- seq(0, 1000, by = 100)
 
-# Set values greater than 1000 to 1000 to ensure they are colored using the same color as the maximum break
-summary_CWD$max_cwd[summary_CWD$max_cwd > 1000] <- 1000
-
 # download countries
 countries <- ne_countries(scale = 50, returnclass = c("sf"))
 
@@ -82,6 +79,18 @@ alexi_data <- summary_CWD %>%
   filter(model == "Observations") %>%
   dplyr::select(-model,-scenario)
 
+# summary_CWD_hist <- summary_CWD %>%
+#   dplyr::filter(scenario == "historical")
+# summary_CWD_landhist <- summary_CWD %>%
+#   dplyr::filter(scenario == "land-hist")
+# quantile(summary_CWD_hist$max_cwd, 0.99) # 34940.76
+# quantile(summary_CWD_landhist$max_cwd, 0.99) # 765.6059
+
+# handle outliers
+summary_CWD$max_cwd[summary_CWD$max_cwd > 1000] <- 1000
+summary_CWD <- summary_CWD %>%
+  mutate(max_cwd = if_else(max_cwd == 1000 & scenario == "historical", NA_real_, max_cwd))
+
 # calculate multi-model mean
 MMmeans <- summary_CWD %>%
   filter(model != "Observations") %>%
@@ -89,6 +98,7 @@ MMmeans <- summary_CWD %>%
   summarise(
     max_cwd = mean(max_cwd, na.rm = TRUE)
   ) %>%
+
   ungroup() %>%
   mutate(model = "Multi-model mean") # add model name to mirror summary_CWD
 
@@ -113,105 +123,131 @@ summary_merged <- summary_merged %>% # Add weights to the summary_merged datafra
   ) %>%
   dplyr::select(-lat1, -lat2, -gridsize)  # Clean up by removing intermediate columns
 
+
+
 # save dataframe
 saveRDS(summary_merged, "summary_maxCWD_MMmean.rds", compress = "xz")
 
+
+
+# Get the list of unique scenarios
+scenarios <- unique(summary_merged$scenario)
+scenarios <- scenarios[!is.na(scenarios)]
+
 model_list <- c("Observations", "Multi-model mean")
 
-# Create separate plots for data in model_list
-plot_list <- lapply(model_list, function(current_mdl) {
-
-  df_model <- filter(summary_merged, model == current_mdl)
-
-  # calculate stats to compare models-obs
-  if(current_mdl != "Observations") {
-
-    # calculate R squared
-    fit <- lm(max_cwd ~ max_cwd_obs, data = df_model)
-    r_squared <- summary(fit)$r.squared
-    r_squared_label <- bquote(italic(R)^2 == .(round(r_squared, 2)))
-
-    # calculate abs(mean bias) using weights
-    mean_bias_abs <- df_model %>%
-      filter(!is.na(max_cwd) & !is.na(max_cwd_obs) & !is.na(weights)) %>% # manually remove NAs when using "sum" (num and den should have same number of elements)
-      mutate(mean_bias_abs = abs(max_cwd - max_cwd_obs) * weights) %>%
-      summarise(weighted_mean_bias_abs = sum(mean_bias_abs, na.rm = TRUE) / sum(weights), na.rm = TRUE) %>%
-      pull(weighted_mean_bias_abs)
-    mean_bias_abs_label <- bquote("|Bias|" == .(round(mean_bias_abs, 0)) ~ "mm")
-
-    # calculate mean bias using weights
-    mean_bias <- df_model %>%
-      filter(!is.na(max_cwd) & !is.na(max_cwd_obs) & !is.na(weights)) %>%
-      mutate(mean_bias = (max_cwd - max_cwd_obs) * weights) %>%
-      summarise(weighted_mean_bias = sum(mean_bias, na.rm = TRUE) / sum(weights), na.rm = TRUE) %>%
-      pull(weighted_mean_bias)
-    mean_bias_label <- bquote("Bias" == .(round(mean_bias, 0)) ~ "mm")
 
 
-  }
+# print figure -------------------------------------------------------
 
-  # Plot global map for each model
-  p <- ggplot() +
-    theme_void() +
-    geom_tile(data = df_model,
-              aes(x = lon, y = lat, color = max_cwd, fill = max_cwd)) +
-    geom_sf(data=ocean, # country borders
-            color= "black",
-            linetype='solid',
-            fill= "white", #cad6df", #D6D6E9
-            size=1) +
-    scale_color_viridis_c(option = "turbo", limits = c(0, 1000), breaks = breaks) + #
-    scale_fill_viridis_c(option = "turbo", limits = c(0, 1000), breaks = breaks) + #
-    coord_sf( # cut Antarctica (sorry penguins!)
-      xlim = c(-179.999, 179.999),
-      ylim = c(-60, 88),
-      expand = FALSE) +
-    theme(
-      plot.title = element_text(hjust = 0.5, size=15), # center title
-      # legend.position = "none",
-      legend.text = element_text(color = "black", size=12), # family = "Prata"
-      legend.title = element_text(color = "black", size=12),
-      plot.margin=unit(c(0,-0.3,0.3,-0.6), 'cm'), # unit(c(top, right, bottom, left), units)
-      legend.key.width = unit(4, "cm"),
-      legend.key.height = unit(0.4, "cm"),
-      panel.border = element_rect(colour = "black", fill= NA, linewidth=0.5)
-    ) +
-    guides(fill = guide_colourbar(frame.linewidth = 0.5, ticks.linewidth = 0.5, frame.colour = "black", ticks.colour = "black"),
-           color = guide_colourbar(frame.linewidth = 0.5, ticks.linewidth = 0.5, frame.colour = "black", ticks.colour = "black")
-    ) +
-    labs(title = current_mdl, color = "Max CWD (mm)", fill = "Max CWD (mm)") # fill and color same label --> only one colorbar in the legend
+# Loop over each scenario
+for (scene in scenarios) {
 
-  # add stats for model panels
-  if(current_mdl != "Observations") {
+  print(paste("Processing scenario:", scene))
 
-    p <- p +
-      annotate("text", x = -175, y = -25, label = r_squared_label, hjust = 0, vjust = 0, size = 4.3) + # R2
-      annotate("text", x = -175, y = -40, label = mean_bias_label, hjust = 0, vjust = 0, size = 4.3) + # mean bias
-      annotate("text", x = -175, y = -55, label = mean_bias_abs_label, hjust = 0, vjust = 0, size = 4.3) # abs(mean bias)
-  }
+  # Filter data for the current scenario
+  first_filter <- dplyr::filter(summary_merged, scenario == scene)
 
-  return(p)
+  # Create separate plots for data in model_list
+  plot_list <- lapply(model_list, function(current_mdl) {
 
-})
+    if(current_mdl == "Observations") {
+      df_model <- dplyr::filter(summary_merged, model == current_mdl)
+    } else if (current_mdl != "Observations") {
+      # calculate stats to compare models-obs
+      df_model <- dplyr::filter(first_filter, model == current_mdl)
 
+      # calculate R squared
+      fit <- lm(max_cwd ~ max_cwd_obs, data = df_model)
+      r_squared <- summary(fit)$r.squared
+      r_squared_label <- bquote(italic(R)^2 == .(round(r_squared, 2)))
 
-# Print all plots with one colorbar
-all <- ggarrange(plotlist = plot_list,
-                 labels = NULL,
-                 ncol = 2, nrow = 1,
-                 common.legend = TRUE, # have just one common legend
-                 legend="bottom")
+      # calculate abs(mean bias) using weights
+      mean_bias_abs <- df_model %>%
+        dplyr::filter(!is.na(max_cwd) & !is.na(max_cwd_obs) & !is.na(weights)) %>% # manually remove NAs when using "sum" (num and den should have same number of elements)
+        mutate(mean_bias_abs = abs(max_cwd - max_cwd_obs) * weights) %>%
+        summarise(weighted_mean_bias_abs = sum(mean_bias_abs, na.rm = TRUE) / sum(weights), na.rm = TRUE) %>%
+        pull(weighted_mean_bias_abs)
+      mean_bias_abs_label <- bquote("|Bias|" == .(round(mean_bias_abs, 0)) ~ "mm")
 
-ggsave("map_CWDmax_MMmean.png", path = "./", width = 12, height = 3.25, dpi=300)
+      # calculate mean bias using weights
+      mean_bias <- df_model %>%
+        dplyr::filter(!(lat >= -23 & lat <= 23)) %>%
+        dplyr::filter(!is.na(max_cwd) & !is.na(max_cwd_obs) & !is.na(weights)) %>%
+        mutate(mean_bias = (max_cwd - max_cwd_obs) * weights) %>%
+        summarise(weighted_mean_bias = sum(mean_bias, na.rm = TRUE) / sum(weights), na.rm = TRUE) %>%
+        pull(weighted_mean_bias)
+      mean_bias_label <- bquote(Bias[extratropics] == .(round(mean_bias, 0)) ~ "mm")
+
+      # bias focusing on tropics
+      mean_bias_tropics <- df_model %>%
+        dplyr::filter(lat >= -23 & lat <= 23) %>%
+        dplyr::filter(!is.na(max_cwd) & !is.na(max_cwd_obs) & !is.na(weights)) %>%
+        mutate(mean_bias = (max_cwd - max_cwd_obs) * weights) %>%
+        summarise(weighted_mean_bias = sum(mean_bias, na.rm = TRUE) / sum(weights), na.rm = TRUE) %>%
+        pull(weighted_mean_bias)
+      mean_bias_tropics_label <- bquote(Bias[tropics] == .(round(mean_bias_tropics, 0)) ~ "mm")
+
+    }
+
+    # Plot global map for each model
+    p <- ggplot() +
+      theme_void() +
+      geom_tile(data = df_model,
+                aes(x = lon, y = lat, color = max_cwd, fill = max_cwd)) +
+      geom_sf(data=ocean, # country borders
+              color= "black",
+              linetype='solid',
+              fill= "white", #cad6df", #D6D6E9
+              size=1) +
+      scale_color_viridis_c(option = "turbo", limits = c(0, 1000), breaks = breaks) + #
+      scale_fill_viridis_c(option = "turbo", limits = c(0, 1000), breaks = breaks) + #
+      coord_sf( # cut Antarctica (sorry penguins!)
+        xlim = c(-179.999, 179.999),
+        ylim = c(-60, 88),
+        expand = FALSE) +
+      theme(
+        plot.title = element_text(hjust = 0.5, size=15), # center title
+        # legend.position = "none",
+        legend.text = element_text(color = "black", size=12), # family = "Prata"
+        legend.title = element_text(color = "black", size=12),
+        plot.margin=unit(c(0,-0.3,0.3,-0.6), 'cm'), # unit(c(top, right, bottom, left), units)
+        legend.key.width = unit(4, "cm"),
+        legend.key.height = unit(0.4, "cm"),
+        panel.border = element_rect(colour = "black", fill= NA, linewidth=0.5)
+      ) +
+      guides(fill = guide_colourbar(frame.linewidth = 0.5, ticks.linewidth = 0.5, frame.colour = "black", ticks.colour = "black"),
+             color = guide_colourbar(frame.linewidth = 0.5, ticks.linewidth = 0.5, frame.colour = "black", ticks.colour = "black")
+      ) +
+      labs(title = current_mdl, color = "Max CWD (mm)", fill = "Max CWD (mm)") # fill and color same label --> only one colorbar in the legend
+
+    # add stats for model panels
+    if(current_mdl != "Observations") {
+
+      p <- p +
+        annotate("text", x = -175, y = -11, label = r_squared_label, hjust = 0, vjust = 0, size = 4.3) + # R2
+        annotate("text", x = -175, y = -25, label = mean_bias_label, hjust = 0, vjust = 0, size = 4.3) + # mean bias
+        annotate("text", x = -175, y = -40, label = mean_bias_tropics_label, hjust = 0, vjust = 0, size = 4.3) + # tropics
+        annotate("text", x = -175, y = -52, label = mean_bias_abs_label, hjust = 0, vjust = 0, size = 4.3) # abs(mean bias)
+
+    }
+
+    return(p)
+
+  })
+
+  # Print all plots with one colorbar
+  all <- ggarrange(plotlist = plot_list,
+                   labels = NULL,
+                   ncol = 2, nrow = 1,
+                   common.legend = TRUE, # have just one common legend
+                   legend="bottom")
+
+  # Define the filename based on the scenario
+  filename <- paste0("map_CWDmax_", scene, "_MMmean.png")
+  ggsave(filename, plot = all, path = "./", width = 12, height = 3.25, dpi = 300)
+}
 
 # save plot list for combined plot
 saveRDS(plot_list, "plot_list_CWD.rds", compress = "xz")
-
-
-
-
-
-
-
-
 

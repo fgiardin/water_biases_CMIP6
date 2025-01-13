@@ -1,7 +1,7 @@
 # script to calculate CWD in every grid cell of CMIP6 data and extract maximum CWD per grid cell
 
 # the code was run in paralle on a local machine, but can be also run on a HPC
-# given the size of the raw data, we didn't upload it on this repo.
+# given the size of the raw data, we didn't upload it on this repo
 # please refer to the "Data availability statement" in the paper to download the data
 
 # libraries

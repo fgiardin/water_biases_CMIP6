@@ -9,7 +9,6 @@ library(rnaturalearthdata)
 library(sf)
 library(patchwork)
 library(cowplot)
-library(ingestr)
 library(terra)
 library(rgdal)  # for readOGR
 library(ggnewscale) # to add multiple scales in same ggplot

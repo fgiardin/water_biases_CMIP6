@@ -1,6 +1,5 @@
 # Function to process and plot data for a given scenario (land-hist and historical)
 
-
 process_scenario_data <- function(summary_deltaSM_scenario, grace_data, scenario_name) {
   # Assign same color to points above upper threshold
   summary_deltaSM_scenario[[plot_variable]][summary_deltaSM_scenario[[plot_variable]] > upper_threshold] <- upper_threshold
@@ -74,11 +73,21 @@ process_scenario_data <- function(summary_deltaSM_scenario, grace_data, scenario
 
       # Calculate mean bias using weights
       mean_bias <- df_stats %>%
-        filter(!is.na(deltaSMmax) & !is.na(deltaSMmax_GRACE) & !is.na(weights)) %>%
+        dplyr::filter(!(lat >= -23 & lat <= 23)) %>%
+        dplyr::filter(!is.na(deltaSMmax) & !is.na(deltaSMmax_GRACE) & !is.na(weights)) %>%
         mutate(mean_bias = (deltaSMmax - deltaSMmax_GRACE) * weights) %>%
         summarise(weighted_mean_bias = sum(mean_bias, na.rm = TRUE) / sum(weights), na.rm = TRUE) %>%
         pull(weighted_mean_bias)
-      mean_bias_label <- bquote("Bias" == .(round(mean_bias, 0)) ~ "mm")
+      mean_bias_label <- bquote(Bias[extratropics] == .(round(mean_bias, 0)) ~ "mm")
+
+      # bias focusing on tropics
+      mean_bias_tropics <- df_stats %>%
+        dplyr::filter(lat >= -23 & lat <= 23) %>%
+        dplyr::filter(!is.na(deltaSMmax) & !is.na(deltaSMmax_GRACE) & !is.na(weights)) %>%
+        mutate(mean_bias = (deltaSMmax - deltaSMmax_GRACE) * weights) %>%
+        summarise(weighted_mean_bias = sum(mean_bias, na.rm = TRUE) / sum(weights, na.rm = TRUE)) %>%
+        pull(weighted_mean_bias)
+      mean_bias_tropics_label <- bquote(Bias[tropics] == .(round(mean_bias_tropics, 0)) ~ "mm")
     }
 
     # Plot global map for each model
@@ -124,13 +133,20 @@ process_scenario_data <- function(summary_deltaSM_scenario, grace_data, scenario
       labs(title = model,
            color = expression(Delta*SM[max]~"(mm)"),
            fill = expression(Delta*SM[max]~"(mm)"))
+      # geom_hline(yintercept = 10, color = "red", linetype = "dashed", size = 1) +
+      # geom_hline(yintercept = -10, color = "blue", linetype = "dashed", size = 1) +
+      # geom_hline(yintercept = 15, color = "red", linetype = "dashed", size = 1) +
+      # geom_hline(yintercept = -15, color = "blue", linetype = "dashed", size = 1) +
+      # geom_hline(yintercept = 23, color = "red", linetype = "dashed", size = 1) +
+      # geom_hline(yintercept = -23, color = "blue", linetype = "dashed", size = 1)
 
     # Add stats for model panels
     if(model != "GRACE observations") {
       p <- p +
-        annotate("text", x = -175, y = -25, label = r_squared_label, hjust = 0, vjust = 0, size = 4.3) + # R^2
-        annotate("text", x = -175, y = -40, label = mean_bias_label, hjust = 0, vjust = 0, size = 4.3) + # mean bias
-        annotate("text", x = -175, y = -55, label = mean_bias_abs_label, hjust = 0, vjust = 0, size = 4.3) # abs(mean bias)
+        annotate("text", x = -175, y = -11, label = r_squared_label, hjust = 0, vjust = 0, size = 4.3) + # R2
+        annotate("text", x = -175, y = -25, label = mean_bias_label, hjust = 0, vjust = 0, size = 4.3) + # mean bias
+        annotate("text", x = -175, y = -40, label = mean_bias_tropics_label, hjust = 0, vjust = 0, size = 4.3) + # tropics
+        annotate("text", x = -175, y = -52, label = mean_bias_abs_label, hjust = 0, vjust = 0, size = 4.3) # abs(mean bias)
     }
 
     return(p)
