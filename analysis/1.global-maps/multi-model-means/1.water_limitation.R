@@ -1,5 +1,5 @@
-# script to plot frequency of SM limitation (multi-model mean)
-# update to also plot comparison with historical data in a separate plot
+# script to plot frequency of SM limitation (multi-model mean) [Fig. 1]
+# update to also plot comparison with historical data in a separate plot (supplementary figures)
 
 # load packages
 library(tidyverse)
@@ -25,7 +25,7 @@ df_count_GRACE <- readRDS("data/theta_crit/monthly/df_count_GRACE.rds") %>%
   unique() %>%
   mutate(model = "Observations")
 
-df_count_mrso <- readRDS("data/theta_crit/monthly/df_count_mrso_hist.rds") %>%
+df_count_mrso <- readRDS("data/theta_crit/monthly/df_count_mrso_allscenarios.rds") %>%
   dplyr::select(-date, -EF, -Rn, -mrso, -mrso_norm) %>%
   unique()
 
@@ -84,12 +84,12 @@ background_color = "white" # set the color corresponding to no data "#ECECED", #
 
 # Create a new (repeated for every model) column with obs data in the original dataframe
 grace_data <- dt_count %>%
-  filter(model_name == "Observations") %>%
+  dplyr::filter(model_name == "Observations") %>%
   dplyr::select(lon, lat, count)
 
 # calculate multi-model mean
 MMmeans <- dt_count %>%
-  filter(model_name != "Observations") %>%
+  dplyr::filter(model_name != "Observations") %>%
   group_by(lon, lat, scenario) %>%
   summarise(
     count = mean(count, na.rm = TRUE)
@@ -117,7 +117,7 @@ summary_merged <- summary_merged %>% # Add weights to the summary_merged datafra
   ) %>%
   dplyr::select(-lat1, -lat2, -gridsize)  # Clean up by removing intermediate columns
 
-saveRDS(data, "summary_merged.rds", compress = "xz")
+saveRDS(summary_merged, "summary_merged.rds", compress = "xz")
 
 
 # Get the list of unique scenarios
@@ -133,91 +133,112 @@ for (scene in scenarios) {
   print(paste("Processing scenario:", scene))
 
   # Filter data for the current scenario
-  first_filter <- filter(summary_merged, scenario == scene)
+  first_filter <- dplyr::filter(summary_merged, scenario == scene)
 
   # Create separate plots for "Observations" and "Multi-model mean"
   plot_list <- lapply(model_list, function(current_mdl) {
 
     # Handle "Observations" separately (since it may not have a scenario)
     if (current_mdl == "Observations") {
-      df_model <- filter(summary_merged, model == current_mdl)
+      df_model <- dplyr::filter(summary_merged, model_name == current_mdl)
     } else {
-      df_model <- filter(first_filter, model == current_mdl)
+      df_model <- dplyr::filter(first_filter, model_name == current_mdl)
     }
 
     # Calculate statistics to compare models with observations
     if (current_mdl != "Observations") {
 
       # Calculate R-squared
-      fit <- lm(max_cwd ~ max_cwd_obs, data = df_model)
+      fit <- lm(count ~ count_GRACE, data = df_model)
       r_squared <- summary(fit)$r.squared
       r_squared_label <- bquote(italic(R)^2 == .(round(r_squared, 2)))
 
-      # Calculate absolute mean bias using weights
+      # calculate abs(mean bias) using weights
       mean_bias_abs <- df_model %>%
-        filter(!is.na(max_cwd) & !is.na(max_cwd_obs) & !is.na(weights)) %>%
-        mutate(mean_bias_abs = abs(max_cwd - max_cwd_obs) * weights) %>%
-        summarise(weighted_mean_bias_abs = sum(mean_bias_abs, na.rm = TRUE) / sum(weights, na.rm = TRUE)) %>%
+        filter(!is.na(count) & !is.na(count_GRACE) & !is.na(weights)) %>% # manually remove NAs when using "sum" (num and den should have same number of elements)
+        mutate(mean_bias_abs = abs(count - count_GRACE) * weights) %>%
+        summarise(weighted_mean_bias_abs = sum(mean_bias_abs, na.rm = TRUE) / sum(weights), na.rm = TRUE) %>%
         pull(weighted_mean_bias_abs)
-      mean_bias_abs_label <- bquote("|Bias|" == .(round(mean_bias_abs, 0)) ~ "mm")
+      mean_bias_abs_label <- bquote("|Bias|" == .(round(mean_bias_abs, 0)) * "%")
 
-      # Calculate mean bias using weights
+      # calculate mean bias using weights
       mean_bias <- df_model %>%
-        filter(!is.na(max_cwd) & !is.na(max_cwd_obs) & !is.na(weights)) %>%
-        mutate(mean_bias = (max_cwd - max_cwd_obs) * weights) %>%
+        filter(!is.na(count) & !is.na(count_GRACE) & !is.na(weights)) %>%
+        mutate(mean_bias = (count - count_GRACE) * weights) %>%
+        summarise(weighted_mean_bias = sum(mean_bias, na.rm = TRUE) / sum(weights), na.rm = TRUE) %>%
+        pull(weighted_mean_bias)
+      mean_bias_label <- bquote("Bias" == .(round(mean_bias, 0)) * "%")
+
+      # bias focusing on tropics
+      mean_bias_tropics <- df_model %>%
+        filter(lat >= -23 & lat <= 23) %>%
+        filter(!is.na(count) & !is.na(count_GRACE) & !is.na(weights)) %>%
+        mutate(mean_bias = (count - count_GRACE) * weights) %>%
         summarise(weighted_mean_bias = sum(mean_bias, na.rm = TRUE) / sum(weights, na.rm = TRUE)) %>%
         pull(weighted_mean_bias)
-      mean_bias_label <- bquote("Bias" == .(round(mean_bias, 0)) ~ "mm")
+      mean_bias_tropics_label <- bquote(Bias[tropics] == .(round(mean_bias_tropics, 0)) * "%")
     }
 
     # Plot global map for each model
     p <- ggplot() +
       theme_void() +
       geom_tile(data = df_model,
-                aes(x = lon, y = lat, color = max_cwd, fill = max_cwd)) +
+                aes(x = lon, y = lat, color = count, fill = count)) +
       geom_sf(data = ocean,
               color = "black",
               linetype = 'solid',
               fill = "white",
               size = 1) +
-      scale_color_viridis_c(option = "turbo", limits = c(0, 1000), breaks = breaks) +
-      scale_fill_viridis_c(option = "turbo", limits = c(0, 1000), breaks = breaks) +
-      coord_sf(
+
+      # Orange-Blue color bar
+      scale_color_viridis_c(
+        option = "turbo",
+        breaks = breaks,
+        limits = c(lower_threshold, upper_threshold)
+      ) +
+      scale_fill_viridis_c(
+        option = "turbo",
+        breaks = breaks,
+        limits = c(lower_threshold, upper_threshold)
+      ) +
+      coord_sf( # cut Antarctica (sorry penguins!)
         xlim = c(-179.999, 179.999),
         ylim = c(-60, 88),
         expand = FALSE) +
       theme(
-        plot.title = element_text(hjust = 0.5, size = 15),
-        legend.text = element_text(color = "black", size = 12),
-        legend.title = element_text(color = "black", size = 12),
-        plot.margin = unit(c(0, -0.3, 0.3, -0.6), 'cm'),
-        legend.key.width = unit(4, "cm"),
+        plot.title = element_text(hjust = 0.5, size=15), # center title
+        # legend.position = "none",
+        legend.text = element_text(color = "black", size=12), # family = "Prata"
+        legend.title = element_text(color = "black", size=15),
+        plot.margin=unit(c(0,-0.3,0.3,-0.6), 'cm'), # unit(c(top, right, bottom, left), units)
+        legend.key.width = unit(2.5, "cm"), # control size of colorbar
         legend.key.height = unit(0.4, "cm"),
-        panel.border = element_rect(colour = "black", fill = NA, linewidth = 0.5)
+        panel.border = element_rect(colour = "black", fill= NA, linewidth=0.5),
+        panel.background = element_rect(fill = background_color, colour = NA) # Setting the background color
       ) +
-      guides(
-        fill = guide_colourbar(frame.linewidth = 0.5, ticks.linewidth = 0.5,
-                               frame.colour = "black", ticks.colour = "black"),
-        color = guide_colourbar(frame.linewidth = 0.5, ticks.linewidth = 0.5,
-                                frame.colour = "black", ticks.colour = "black")
+      guides(fill = guide_colourbar(frame.linewidth = 0.5, ticks.linewidth = 0.5, frame.colour = "black", ticks.colour = "black"),
+             color = guide_colourbar(frame.linewidth = 0.5, ticks.linewidth = 0.5, frame.colour = "black", ticks.colour = "black")
       ) +
       labs(
-        title = ifelse(current_mdl == "Observations",
-                       "Observations",
-                       paste0(current_mdl, " (", scene, ")")),
-        color = "Max CWD (mm)",
-        fill = "Max CWD (mm)"
+        title = current_mdl,
+        color = "Frequency of water limitation (%)",
+        fill = "Frequency of water limitation (%)",
+        # fill = expression(paste("number of months when SM < ", theta[crit], " (-) "))
       )
 
-    # Add statistics annotations for model panels
-    if (current_mdl != "Observations") {
+    # more specific title rather than just "Observations"
+    if(current_mdl == "Observations") {
+      p <- p + labs(
+        title = "GOME-2 SIF and GRACE observations")
+    }
+
+    # add stats for models
+    if(current_mdl != "Observations") {
       p <- p +
-        annotate("text", x = -175, y = -25, label = r_squared_label,
-                 hjust = 0, vjust = 0, size = 4.3) +
-        annotate("text", x = -175, y = -40, label = mean_bias_label,
-                 hjust = 0, vjust = 0, size = 4.3) +
-        annotate("text", x = -175, y = -55, label = mean_bias_abs_label,
-                 hjust = 0, vjust = 0, size = 4.3)
+        annotate("text", x = -175, y = -11, label = r_squared_label, hjust = 0, vjust = 0, size = 4.3) + # R2
+        annotate("text", x = -175, y = -25, label = mean_bias_label, hjust = 0, vjust = 0, size = 4.3) + # mean bias
+        annotate("text", x = -175, y = -40, label = mean_bias_tropics_label, hjust = 0, vjust = 0, size = 4.3) + # tropics
+        annotate("text", x = -175, y = -52, label = mean_bias_abs_label, hjust = 0, vjust = 0, size = 4.3) # abs(mean bias)
     }
 
     return(p)
@@ -233,6 +254,6 @@ for (scene in scenarios) {
   )
 
   # Define the filename based on the scenario
-  filename <- paste0("map_CWDmax_", scene, "_MMmean.png")
+  filename <- paste0("map_count_", scene, "_MMmean.png")
   ggsave(filename, plot = all, path = "./", width = 12, height = 3.25, dpi = 300)
 }
