@@ -194,12 +194,14 @@ for (scene in scenarios) {
       scale_color_viridis_c(
         option = "turbo",
         breaks = breaks,
-        limits = c(lower_threshold, upper_threshold)
+        limits = c(lower_threshold, upper_threshold),
+        na.value = "#8C8C8C"  # NA color #969696 or #A0A0A0
       ) +
       scale_fill_viridis_c(
         option = "turbo",
         breaks = breaks,
-        limits = c(lower_threshold, upper_threshold)
+        limits = c(lower_threshold, upper_threshold),
+        na.value = "#8C8C8C"  # NA color
       ) +
       coord_sf( # cut Antarctica (sorry penguins!)
         xlim = c(-179.999, 179.999),
@@ -247,7 +249,7 @@ for (scene in scenarios) {
   # Arrange and save the plots for the current scenario
   all <- ggarrange(
     plotlist = plot_list,
-    labels = NULL,
+    labels = "auto",
     ncol = 2, nrow = 1,
     common.legend = TRUE,
     legend = "bottom"

@@ -250,4 +250,3 @@ for (scene in scenarios) {
 
 # save plot list for combined plot
 saveRDS(plot_list, "plot_list_CWD.rds", compress = "xz")
-
