@@ -73,12 +73,13 @@ process_scenario_data <- function(summary_deltaSM_scenario, grace_data, scenario
 
       # Calculate mean bias using weights
       mean_bias <- df_stats %>%
-        dplyr::filter(!(lat >= -23 & lat <= 23)) %>%
+        # dplyr::filter(!(lat >= -23 & lat <= 23)) %>%
         dplyr::filter(!is.na(deltaSMmax) & !is.na(deltaSMmax_GRACE) & !is.na(weights)) %>%
         mutate(mean_bias = (deltaSMmax - deltaSMmax_GRACE) * weights) %>%
         summarise(weighted_mean_bias = sum(mean_bias, na.rm = TRUE) / sum(weights), na.rm = TRUE) %>%
         pull(weighted_mean_bias)
-      mean_bias_label <- bquote(Bias[extratropics] == .(round(mean_bias, 0)) ~ "mm")
+      mean_bias_label <- bquote(Bias == .(round(mean_bias, 0)) ~ "mm")
+      # mean_bias_label <- bquote(Bias[extratropics] == .(round(mean_bias, 0)) ~ "mm")
 
       # bias focusing on tropics
       mean_bias_tropics <- df_stats %>%

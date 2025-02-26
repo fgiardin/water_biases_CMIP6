@@ -19,7 +19,7 @@ sf_use_s2(FALSE)
 
 
 # Define the directory path where the .rds files are located
-directory_path <- "data/CWD/max_CWD/"
+directory_path <- "data/CWD/max_CWD"
 
 # get list of files we want to merge
 file_locations <- list.files(directory_path, # define directory where all files are
@@ -36,17 +36,21 @@ dataframes_list <- list()
 
 # Loop through the files, read each .rds file, and store the dataframes in the list
 for (file_path in file_locations) {
-  # Extract the model name from the file name
-  model_name <- gsub(".*max_cwd_(.*)\\.rds", "\\1", basename(file_path))
 
   # Read the dataframe from the .rds file
   df <- readRDS(file_path)
 
-  # Add the model name as a new column in the dataframe
-  df$model_name <- model_name
+  if (grepl("ALEXI", file_path)) { # If it's the ALEXI file, create the column with ".ALEXI"
+    df$model_name <- ".ALEXI"
+
+  } else { # Else add the model name as a new column in the dataframe
+    df <- df %>%
+      dplyr::rename(model_name = model) %>%
+      dplyr::select(-scenario)
+  }
 
   # Append the dataframe to the list
-  dataframes_list[[model_name]] <- df
+  dataframes_list[[df$model_name[1]]] <- df
 }
 
 # Combine all dataframes in the list into a single dataframe
@@ -160,7 +164,7 @@ plot_list <- lapply(model_list, function(model) {
     guides(fill = guide_colourbar(frame.linewidth = 0.5, ticks.linewidth = 0.5, frame.colour = "black", ticks.colour = "black"),
            color = guide_colourbar(frame.linewidth = 0.5, ticks.linewidth = 0.5, frame.colour = "black", ticks.colour = "black")
     ) +
-    labs(title = model, color = "Max CWD (mm)", fill = "Max CWD (mm)") # fill and color same label --> only one colorbar in the legend
+    labs(title = model, color = "Maximum water storage (mm)", fill = "Maximum water storage (mm)") # fill and color same label --> only one colorbar in the legend
 
   # add stats for model panels
   if(model != "ALEXI observations") {
@@ -178,11 +182,11 @@ plot_list <- lapply(model_list, function(model) {
 # Print all plots with one colorbar
 all <- ggarrange(plotlist = plot_list,
                  labels = "auto",
-                 ncol = 2, nrow = 4,
+                 ncol = 2, nrow = 5,
                  common.legend = TRUE, # have just one common legend
                  legend="bottom")
 
-ggsave("map_CWDmax_all.png", path = "./", width = 12, height = 11, dpi=300)
+ggsave("map_CWDmax_9-models.png", path = "./", width = 12, height = 13.75, dpi=600)
 
 
 # saveRDS(summary_merged, "summary_max_cwd.rds", compress = "xz")
