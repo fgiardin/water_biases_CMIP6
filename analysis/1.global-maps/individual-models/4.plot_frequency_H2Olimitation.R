@@ -23,9 +23,19 @@ df_count_GRACE <- readRDS("data/theta_crit/monthly/df_count_GRACE.rds") %>%
   unique() %>%
   mutate(model = "Observations")
 
-df_count_mrso <- readRDS("data/theta_crit/monthly/df_count_mrso.rds") %>%
+df_count_mrso_raw <- readRDS("data/theta_crit/monthly/df_count_mrso_allscenarios.rds")
+
+df_count_mrso <- df_count_mrso_raw %>%
+  dplyr::select(-date, -EF, -Rn, -mrso, -mrso_norm) %>%
+  filter(scenario != "historical") %>%
+  dplyr::select(-scenario) %>%
+  unique()
+
+df_count_mrso_old <- readRDS("data/theta_crit/monthly/old/df_count_mrso.rds") %>%
   dplyr::select(-date, -EF, -Rn, -mrso, -mrso_norm) %>%
   unique()
+
+
 
 dt_count <- bind_rows(df_count_mrso, df_count_GRACE) %>%
   rename(model_name = model) %>%
@@ -205,10 +215,10 @@ plot_list <- lapply(sorted_models, function(model) {
 # Print all plots with one colorbar
 all <- ggarrange(plotlist = plot_list,
                  labels = "auto",
-                 ncol = 2, nrow = 4,
+                 ncol = 2, nrow = 5,
                  common.legend = TRUE, # have just one common legend
                  legend="bottom")
 
-filename <- paste0("map_", plot_variable, ".png")
-ggsave(filename, path = "./", width = 12, height = 11, dpi= 600)
+filename <- paste0("map_", plot_variable, "_9-models.png")
+ggsave(filename, path = "./", width = 12, height = 13.75, dpi= 600)
 

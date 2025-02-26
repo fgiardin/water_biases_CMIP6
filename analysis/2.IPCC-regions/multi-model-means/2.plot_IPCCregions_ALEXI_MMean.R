@@ -12,7 +12,24 @@ sub_colors = 0 # assign different colors within each continent (i.e. from light 
 # load and prepare data ---------------------------------------------------
 
 # load SM data
-summary_cwd <- readRDS("data/CWD/max_CWD/summary_maxCWD_MMmean.rds")
+summary_cwd <- readRDS("data/CWD/max_CWD/summary_maxCWD_MMmean.rds") %>%
+  dplyr::rename(model_name = model) %>%
+  dplyr::select(-weights) %>%
+  filter(scenario != "historical") %>%
+  dplyr::select(-scenario)
+
+# Create rows for Observations using the values in max_cwd_obs to have format needed in code below
+obs_rows <- summary_cwd %>%
+  mutate(model_name = "Observations",
+         max_cwd = max_cwd_obs) %>%
+  unique()
+
+# Append these rows to the original dataset
+summary_cwd <- bind_rows(summary_cwd, obs_rows)
+
+summary_cwd_old <- readRDS("data/CWD/max_CWD/old/summary_maxCWD_MMmean_old.rds")
+
+
 
 # load IPCC data
 IPCC_mask <- rast("data-raw/IPCC_regions/ar6_land_regions_g025_2D.nc")
@@ -213,8 +230,8 @@ for(model in unique_models) {
     # Add the scatter plot points
     geom_point(size = 2) +  # Add the scatter plot points
     geom_abline(intercept = 0, slope = 1, linetype = "dashed", color = "black") +  # Add the y=x dashed line
-    labs(x = "ALEXI CWD (mm)",
-         y = paste(model, "CWD (mm)"),
+    labs(x = "Observations (mm)", # "ALEXI CWD (mm)"
+         y = paste(model, "(mm)"),
          color = "IPCC WGI reference regions", # legend title
          shape = "IPCC WGI reference regions",
          title = "max CWD"
@@ -258,9 +275,14 @@ for(model in unique_models) {
 
 }
 
+# Create an empty plot
+empty_plot <- ggplot() +
+  theme_void() +
+  ggtitle("")  # remove any default title
+plots_with_empty <- c(plots, list(empty_plot))
 
-all <- ggarrange(plotlist = plots,
-                 labels = NULL,
+all <- ggarrange(plotlist = plots_with_empty,
+                 labels = "auto",
                  ncol = 3, nrow = 1,
                  common.legend = TRUE, # have just one common legend
                  legend= "bottom")

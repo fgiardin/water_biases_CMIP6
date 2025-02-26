@@ -230,11 +230,11 @@ for(model in unique_models) {
     # Add the scatter plot points
     geom_point(size = 2) +  # Add the scatter plot points
     geom_abline(intercept = 0, slope = 1, linetype = "dashed", color = "black") +  # Add the y=x dashed line
-    labs(x = "Observations-based CWD (mm)", # "ALEXI CWD (mm)"
-         y = paste(model, "CWD (mm)"),
+    labs(x = "ALEXI and WATCH-WFDEI obs (mm)", # "ALEXI CWD (mm)"
+         y = paste(model, "(mm)"),
          color = "IPCC WGI reference regions", # legend title
          shape = "IPCC WGI reference regions",
-         title = "max CWD"
+         title = expression(paste(CWD[max]))
     ) +
     theme_minimal(base_size = 14) +  # consistently increase base font
     theme(axis.ticks = element_line(color = "black"), # add axes ticks
@@ -275,9 +275,14 @@ for(model in unique_models) {
 
 }
 
+# Create an empty plot
+empty_plot <- ggplot() +
+  theme_void() +
+  ggtitle("")  # remove any default title
+plots_with_empty <- c(plots, list(empty_plot))
 
-all <- ggarrange(plotlist = plots,
-                 labels = NULL,
+all <- ggarrange(plotlist = plots_with_empty,
+                 labels = "auto",
                  ncol = 3, nrow = 1,
                  common.legend = TRUE, # have just one common legend
                  legend= "bottom")

@@ -1,6 +1,6 @@
 # script to plot land water storage as quantified by CWD_max using cmip6 data and ALEXI (S_CWDX)
-# multi-model mean
-# update to also plot comparison with historical data in a separate plot (goes to SI)
+# multi-model mean (MMean)
+# update to also plot comparison with historical data (_hist) in a separate plot (goes to SI)
 
 # load packages
 devtools::load_all(".")
@@ -221,7 +221,11 @@ for (scene in scenarios) {
       guides(fill = guide_colourbar(frame.linewidth = 0.5, ticks.linewidth = 0.5, frame.colour = "black", ticks.colour = "black"),
              color = guide_colourbar(frame.linewidth = 0.5, ticks.linewidth = 0.5, frame.colour = "black", ticks.colour = "black")
       ) +
-      labs(title = current_mdl, color = "Max CWD (mm)", fill = "Max CWD (mm)") # fill and color same label --> only one colorbar in the legend
+      labs(title = ifelse(current_mdl == "Observations",
+                          "ALEXI and WATCH-WFDEI observations", # change title instead of just "Observations"
+                          current_mdl),
+           color = "Max CWD (mm)", # fill and color same label --> only one colorbar in the legend
+           fill = "Max CWD (mm)")
 
     # add stats for model panels
     if(current_mdl != "Observations") {
