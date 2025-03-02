@@ -164,7 +164,11 @@ plot_list <- lapply(model_list, function(model) {
     guides(fill = guide_colourbar(frame.linewidth = 0.5, ticks.linewidth = 0.5, frame.colour = "black", ticks.colour = "black"),
            color = guide_colourbar(frame.linewidth = 0.5, ticks.linewidth = 0.5, frame.colour = "black", ticks.colour = "black")
     ) +
-    labs(title = model, color = "Maximum water storage (mm)", fill = "Maximum water storage (mm)") # fill and color same label --> only one colorbar in the legend
+    labs(title = ifelse(model == "ALEXI observations",
+                        "ALEXI and WATCH-WFDEI observations",
+                        model),
+         color = "Maximum water storage (mm)",
+         fill  = "Maximum water storage (mm)")
 
   # add stats for model panels
   if(model != "ALEXI observations") {
