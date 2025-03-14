@@ -11,12 +11,55 @@ library(sf)
 library(ncdf4)
 
 # load data prepared by Ryan --------------------------------------------------------
-GWLS_data <- readMat("data/GRACE/GWLS_2_0_ALWSC.mat")  # deltaSM already calculated
+GWLS_data <- readMat("data/Comparisons_GRACE/GWLS_2_0_ALWSC.mat")  # deltaSM already calculated
 GRACE_data <- readRDS("data/GRACE/summary_merged_deltaSM.rds") %>%
   dplyr::filter(model_name == "GRACE observations") %>%
   dplyr::select(lon, lat, deltaSMmax)
 
-GWLS_data <- readRDS("data/GLWS/deltaSM_GWLS.rds")
+GWLDAS_data <- readMat("data/Comparisons_GRACE/GLDAS_CLSM_ALWSC.mat")
+
+# align GRACE and GWLDAS dataframes -----------------------------------------
+# Convert GWLDAS_data to a DataFrame
+lon <- GWLDAS_data$lon[, 1]
+lat <- GWLDAS_data$lat[, 1]
+dsmldas_max <- GWLDAS_data$dsm.max
+
+# Create a dataframe
+GWLDAS_df <- expand.grid(lon = lon, lat = lat) %>%
+  mutate(dsmldas_max = as.vector(dsmldas_max))
+
+# Step 2: Filter GWLDAS_data to GRACE_data range
+GWLDAS_filtered <- GWLDAS_df %>%
+  filter(lon >= min(GRACE_data$lon), lon <= max(GRACE_data$lon),
+         lat >= min(GRACE_data$lat), lat <= max(GRACE_data$lat))
+
+# Step 3: Aggregate GWLDAS_data to Match GRACE Resolution
+GWLDAS_aggregated <- GWLDAS_filtered %>%
+  mutate(
+    lon_bin = floor((lon + 180) / 2.5) * 2.5 - 178.75,
+    lat_bin = floor((lat + 90) / 2.5) * 2.5 - 88.75
+  ) %>%
+  group_by(lon_bin, lat_bin) %>%
+  summarize(dsmldas_max = mean(dsmldas_max, na.rm = TRUE)) %>%  # average to same resolution as GRACE
+  rename(lon = lon_bin, lat = lat_bin) %>%
+  ungroup()
+
+# Final GWLDAS data
+GWLDAS_final <- GWLDAS_aggregated
+
+range(GWLDAS_final$lat)  # Should match [-53.75, 81.25]
+range(GWLDAS_final$lon)  # Should match [-178.75, 178.75]
+
+# Focus on vegetated land using GRACE pixels
+GRACE_pixels <- GRACE_data %>%
+  dplyr::select(lon, lat) %>%
+  distinct()
+
+GWLDAS_matched <- GWLDAS_final %>%
+  semi_join(GRACE_pixels, by = c("lon", "lat"))
+
+print(dim(GWLS_matched))
+print(dim(GRACE_data))
 
 
 
@@ -65,7 +108,7 @@ print(dim(GWLS_matched))
 print(dim(GRACE_data))
 
 
-# Plot --------------------------------------------------------------------
+# Plot GWLS --------------------------------------------------------------------
 
 ### Prepare plot
 # assign same color to points above upper threshold
@@ -77,8 +120,10 @@ rounded_interval <- round(interval / 100) * 100
 breaks <- seq(0, upper_threshold, by = rounded_interval)
 
 # Cap values to 1000 for plotting (outliers)
-GWLS_final <- GWLS_data %>%
-  mutate(dsmgw_max = pmin(deltaSMmax/10, upper_threshold)) # pmin: replaces all values greater than 1000 with 1000
+GWLS_final <- GWLS_matched %>%
+  mutate(dsmgw_max = pmin(dsmgw_max, upper_threshold)) # pmin: replaces all values greater than 1000 with 1000
+GWLDAS_final <- GWLDAS_matched %>%
+  mutate(dsmldas_max = pmin(dsmldas_max, upper_threshold)) # pmin: replaces all values greater than 1000 with 1000
 GRACE_final <- GRACE_data %>%
   mutate(deltaSMmax = pmin(deltaSMmax, upper_threshold))
 
@@ -141,9 +186,9 @@ a <- ggplot() +
 ### Plot global map GWLS
 b <- ggplot() +
   theme_void() +
-  geom_tile(data = GWLS_final,
+  geom_tile(data = GWLDAS_final,
             aes(x = lon, y = lat,
-                color = dsmgw_max, fill = dsmgw_max # this notation extracts the string contained in "plot_variable" from the dataframe
+                color = dsmldas_max, fill = dsmldas_max # this notation extracts the string contained in "plot_variable" from the dataframe
             )) +
   geom_sf(data=ocean, # country borders
           color= "black",
@@ -195,10 +240,4 @@ all <- ggarrange(plotlist = plot_list,
                  common.legend = TRUE, # have just one common legend
                  legend="bottom")
 
-ggsave("GRACE_GWLS_comparison.png", path = "./", width = 12, height = 3.25, dpi= 600)
-
-
-
-
-
-
+ggsave("GRACE_GLDAS_comparison.png", path = "./", width = 12, height = 3.25, dpi= 600)
