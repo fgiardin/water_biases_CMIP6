@@ -1,39 +1,60 @@
-# script to plot CWDmax results grouped by IPCC region
+# script to plot water limitation results grouped by IPCC region
 # multi-model mean
 
-# load libraries
-library(terra)
+# load packages
 library(tidyverse)
+library(terra)
 library(ggpubr)
-library(scales)
+library(data.table)
 
-sub_colors = 0 # assign different colors within each continent (i.e. from light to dark blue)
+# load plot data
+df_count_GRACE <- readRDS("data/theta_crit/monthly/df_count_GRACE.rds") %>%
+  dplyr::select(-date, -SIF, -TWS) %>%  # remove temporal values
+  unique() %>%
+  mutate(model = "Observations")
 
-# load and prepare data ---------------------------------------------------
-
-# load SM data
-summary_cwd <- readRDS("data/CWD/max_CWD/summary_maxCWD_MMmean.rds") %>%
-  dplyr::rename(model_name = model) %>%
-  dplyr::select(-weights) %>%
-  filter(scenario != "historical") %>%
-  dplyr::select(-scenario)
-
-# Create rows for Observations using the values in max_cwd_obs to have format needed in code below
-obs_rows <- summary_cwd %>%
-  mutate(model_name = "Observations",
-         max_cwd = max_cwd_obs) %>%
+df_count_mrso <- readRDS("data/theta_crit/monthly/df_count_mrso_allscenarios.rds") %>%
+  dplyr::filter(scenario == "land-hist") %>%
+  dplyr::select(-date, -EF, -Rn, -mrso, -mrso_norm, -scenario) %>%
   unique()
 
-# Append these rows to the original dataset
-summary_cwd <- bind_rows(summary_cwd, obs_rows)
+dt_count <- bind_rows(df_count_mrso, df_count_GRACE) %>%   # NAs = cells where the segmented function couldn't find a breakpoint (not enough data at that cell)
+  rename(model_name = model) %>%
+  mutate(count = count*100) %>%
+  mutate(count = ifelse(Intercept < EFmax,
+                        count, # keep only rows with meaningful intercept (when the EF vs SM relationship decreases)
+                        0))   # this way 0s represent locations that are never water-limited according to our definition!
 
-summary_cwd_old <- readRDS("data/CWD/max_CWD/old/summary_maxCWD_MMmean_old.rds")
+# make sure all models have same cells that are NA
+setDT(dt_count) # Convert to data.table if it's not already
+na_locations <- unique(dt_count[is.na(theta_crit), .(lon, lat)]) # Identify all unique lon and lat combinations where any of the columns of interest are NA
+dt_count[na_locations, # Update the original data.table to set the values to NA for the identified lon and lat, for all models
+         on = .(lon, lat),
+         `:=` (theta_crit = NA_real_,
+               EFmax = NA_real_,
+               Slope = NA_real_,
+               Intercept = NA_real_,
+               count = NA_real_)]
 
+# calculate multi-model mean
+MMmeans <- dt_count %>%
+  dplyr::filter(model_name != "Observations") %>%
+  group_by(lon, lat) %>%
+  summarise(
+    count = mean(count, na.rm = TRUE)
+  ) %>%
+  ungroup() %>%
+  mutate(model_name = "Multi-model mean") # add model name to mirror summary_deltaSM
 
+dt_count <- dt_count %>% # bind rows to original dt
+  bind_rows(MMmeans)
 
 # load IPCC data
 IPCC_mask <- rast("data-raw/IPCC_regions/ar6_land_regions_g025_2D.nc")
 IPCC_mask <- terra::rotate(IPCC_mask)
+
+
+# process and merge data --------------------------------------------------
 
 df_IPCC <- terra::as.data.frame(IPCC_mask, xy = TRUE) %>%
   rename(lon = x,
@@ -64,30 +85,31 @@ full_region_names <- c('GIC'  = 'Greenland/Iceland', 'NWN'  = 'N.W.North-America
 numbers <- 0:45
 df <- data.frame(ID = numbers, Region = regions)
 
-# merge to original df
+# merge to original IPCC df
 df_IPCC <- df_IPCC %>%
   left_join(df, by = join_by(ID)) %>%
   dplyr::filter(ID > 0)
 
-# merge to max_cwd
-df_plot <- summary_cwd %>%
+# merge to count df
+df_plot <- dt_count %>%
   left_join(df_IPCC, by = join_by(lon, lat)) %>%
   drop_na() %>%
-  group_by(Region, model_name) %>% # in every IPCC cell and per every model, calculate median max_cwd
-  summarise(mean_cwd = mean(max_cwd, na.rm = TRUE)) %>% # mean cwd within IPCC region
+  group_by(Region, model_name) %>% # in every IPCC cell and per every model, calculate mean/median count
+  # dplyr::filter(n() >= 10) %>% # only retain Regions with values from at least 10 grid cells
+  summarise(median_count = mean(count, na.rm = TRUE)) %>%
   ungroup()
 
-# Filter out the data for the ALEXI
-alexi_data <- df_plot %>%
+# Filter out the data for the observations (count based on SIF vs GRACE)
+grace_data <- df_plot %>%
   filter(model_name == "Observations") %>%
-  dplyr::select(-model_name) # remove model name column (as ALEXI data will have its own column in df_merged)
+  dplyr::select(-model_name) # remove model name column (as GRACE data will have its own column in df_merged)
 
-# Create a new (repeated for every model) column with ALEXI data in the original dataframe
-df_merged <- full_join(df_plot %>% dplyr::filter(model_name != "Observations"), # remove ALEXI in the original dataframe to avoid repetitions
-                       alexi_data, by = "Region",
-                       suffix = c("", "_ALEXI")) # rename new column "mean_cwd" + "_ALEXI"
+# Create a new (repeated for every model) column with GRACE data in the original dataframe
+df_merged <- full_join(df_plot %>% dplyr::filter(model_name != "Observations"), # remove GRACE in the original dataframe to avoid repetitions
+                       grace_data, by = "Region",
+                       suffix = c("", "_obs")) # rename new column "count" + "_obs"
 
-# Get the unique model names (excluding ALEXI observations) and create scatter plots.
+# Get the unique model names (excluding .GRACE) and create scatter plots.
 unique_models <- unique(df_merged$model_name)
 
 # Extract unique regions from df_merged
@@ -103,81 +125,37 @@ filtered_regions <- regions[regions %in% unique_regions_in_data]
 # Reorder the Region factor in df_merged according to the filtered_regions
 df_merged$Region <- factor(df_merged$Region, levels = filtered_regions)
 
-# manage colors of points -------------------------------------------------
 
-if (sub_colors){
+# manage colors -----------------------------------------------------------
 
-  # Base HCL colors for major regions
-  base_colors <- list(
-    "North and Central America" = c("#00008B", "#ADD8E6"), # DarkBlue to LightBlue
-    "South America"             = c("#006400", "#98FB98"), # DarkGreen to PaleGreen
-    "Africa"                    = c("#8B0000", "#FA8072"), # DarkRed to Salmon
-    "Europe"                    = c("#FFD700", "#FFFFE0"), # Gold to LightYellow
-    "Russia/Asia"               = c("#800080", "#DDA0DD"), # Purple to Plum
-    "Australia, New Zealand and South East Asia" = c("#FFA500", "#FFEFD5") # Orange to PapayaWhip
-  )
+# Base colors for major regions (one color per region)
+base_colors <- list(
+  "North and Central America" = "#00008B", # DarkBlue
+  "South America"             = "#4CAF4C", # DarkGreen
+  "Africa"                    = "#CD3333", # DarkRed
+  "Europe"                    = "#FFD700", # Gold
+  "Russia/Asia"               = "#BF3EFF", # Purple
+  "Australia, New Zealand and South East Asia" = "#FF7F00" # Orange
+)
 
-  # sub-regions in order of appearance within each major region
-  macro_regions <- list(
-    "North and Central America" = c('NWN', 'NEN', 'WNA', 'CNA', 'ENA', 'NCA', 'SCA', 'CAR'),
-    "South America" = c('NWS', 'NSA', 'NES', 'SAM', 'SWS', 'SES', 'SSA'),
-    "Europe" = c('NEU', 'WCE', 'EEU', 'MED'),
-    "Africa" = c('SAH', 'WAF', 'CAF', 'NEAF', 'SEAF', 'WSAF', 'ESAF', 'MDG'),
-    "Russia/Asia" = c('RAR', 'WSB', 'ESB', 'RFE', 'WCA', 'ECA', 'TIB', 'EAS', 'ARP', 'SAS'),
-    "Australia, New Zealand and South East Asia" = c('SEA', 'NAU', 'CAU', 'EAU', 'SAU', 'NZ')
-  )
-  macro_regions <- lapply(macro_regions, intersect, filtered_regions) # only keep regions that appears in my final dataset
+# sub-regions in order of appearance within each major region
+macro_regions <- list(
+  "North and Central America" = c('NWN', 'NEN', 'WNA', 'CNA', 'ENA', 'NCA', 'SCA', 'CAR'),
+  "South America" = c('NWS', 'NSA', 'NES', 'SAM', 'SWS', 'SES', 'SSA'),
+  "Europe" = c('NEU', 'WCE', 'EEU', 'MED'),
+  "Africa" = c('SAH', 'WAF', 'CAF', 'NEAF', 'SEAF', 'WSAF', 'ESAF', 'MDG'),
+  "Russia/Asia" = c('RAR', 'WSB', 'ESB', 'RFE', 'WCA', 'ECA', 'TIB', 'EAS', 'ARP', 'SAS'),
+  "Australia, New Zealand and South East Asia" = c('SEA', 'NAU', 'CAU', 'EAU', 'SAU', 'NZ')
+)
+macro_regions <- lapply(macro_regions, intersect, filtered_regions) # only keep regions that appear in the final dataset
 
+# Assigning the base color to each sub-region within the macro regions
+region_colors <- unlist(lapply(names(macro_regions), function(region_name) {
+  setNames(rep(base_colors[[region_name]], length(macro_regions[[region_name]])), macro_regions[[region_name]])
+}))
 
-  # Function to generate n intermediate colors between two colors
-  generate_colors <- function(color1, color2, n) {
-    colorRampPalette(c(color1, color2))(n)
-  }
-
-  # Applying the function to each macro-region to create a unique palette
-  macro_region_palettes <- lapply(names(macro_regions), function(region_name) {
-    colors <- base_colors[[region_name]]
-    generate_colors(colors[1], colors[2], length(macro_regions[[region_name]]))
-  })
-
-  # Flattening the list of palettes into a single named vector
-  region_colors <- unlist(macro_region_palettes)
-
-  # Assign back the names of the regions
-  names(region_colors) <- filtered_regions
-
-} else {
-
-  # Base colors for major regions (one color per region)
-  base_colors <- list(
-    "North and Central America" = "#00008B", # DarkBlue
-    "South America"             = "#4CAF4C", # DarkGreen
-    "Africa"                    = "#CD3333", # DarkRed
-    "Europe"                    = "#FFD700", # Gold
-    "Russia/Asia"               = "#BF3EFF", # Purple
-    "Australia, New Zealand and South East Asia" = "#FF7F00" # Orange
-  )
-
-  # sub-regions in order of appearance within each major region
-  macro_regions <- list(
-    "North and Central America" = c('NWN', 'NEN', 'WNA', 'CNA', 'ENA', 'NCA', 'SCA', 'CAR'),
-    "South America" = c('NWS', 'NSA', 'NES', 'SAM', 'SWS', 'SES', 'SSA'),
-    "Europe" = c('NEU', 'WCE', 'EEU', 'MED'),
-    "Africa" = c('SAH', 'WAF', 'CAF', 'NEAF', 'SEAF', 'WSAF', 'ESAF', 'MDG'),
-    "Russia/Asia" = c('RAR', 'WSB', 'ESB', 'RFE', 'WCA', 'ECA', 'TIB', 'EAS', 'ARP', 'SAS'),
-    "Australia, New Zealand and South East Asia" = c('SEA', 'NAU', 'CAU', 'EAU', 'SAU', 'NZ')
-  )
-  macro_regions <- lapply(macro_regions, intersect, filtered_regions) # only keep regions that appear in the final dataset
-
-  # Assigning the base color to each sub-region within the macro regions
-  region_colors <- unlist(lapply(names(macro_regions), function(region_name) {
-    setNames(rep(base_colors[[region_name]], length(macro_regions[[region_name]])), macro_regions[[region_name]])
-  }))
-
-  # Assign back the names of the regions
-  names(region_colors) <- filtered_regions
-
-}
+# Assign back the names of the regions
+names(region_colors) <- filtered_regions
 
 
 # manage shape of points --------------------------------------------------
@@ -200,12 +178,11 @@ df_merged <- df_merged %>%
   drop_na()
 
 
-# focus on multi-model mean
-unique_models <- "Multi-model mean"
 
 # scatter plots -----------------------------------------------------------
 
 plots <- list()
+unique_models <- "Multi-model mean"
 
 for(model in unique_models) {
 
@@ -213,28 +190,27 @@ for(model in unique_models) {
   df_model <- df_merged %>% filter(model_name == model)
 
   # calculate R2 within each model
-  fit <- lm(mean_cwd ~ mean_cwd_ALEXI, data = df_model)
+  fit <- lm(median_count ~ median_count_obs, data = df_model)
   r_squared <- summary(fit)$r.squared
   r_squared_label <- bquote(italic(R)^2 == .(round(r_squared, 2)))
 
   plots[[model]] <- ggplot(data = df_model,
-                           aes(x = mean_cwd_ALEXI, # same x-axis for all sub-plots
-                               y = mean_cwd,
+                           aes(x = median_count_obs, # same x-axis for all sub-plots
+                               y = median_count,
                                color = Region,
                                shape = Region # as.factor(unique_id)
                            )) +
 
     # add R2
-    annotate("text", x = 6, y = 743, label = r_squared_label, hjust = 0, vjust = 0, size = 5) +
+    annotate("text", x = 0.7, y = 93, label = r_squared_label, hjust = 0, vjust = 0, size = 5) +
 
     # Add the scatter plot points
     geom_point(size = 2) +  # Add the scatter plot points
     geom_abline(intercept = 0, slope = 1, linetype = "dashed", color = "black") +  # Add the y=x dashed line
-    labs(x = "ALEXI and WATCH-WFDEI obs (mm)", # "ALEXI CWD (mm)"
-         y = paste(model, "(mm)"),
+    labs(x = "Observations (%)",
+         y = paste(model, "(%)"), # Adding (%) to the y-axis title
          color = "IPCC WGI reference regions", # legend title
-         shape = "IPCC WGI reference regions",
-         title = expression(paste(CWD[max]))
+         shape = "IPCC WGI reference regions"
     ) +
     theme_minimal(base_size = 14) +  # consistently increase base font
     theme(axis.ticks = element_line(color = "black"), # add axes ticks
@@ -242,7 +218,6 @@ for(model in unique_models) {
           panel.grid.minor = element_blank(),  # Remove minor gridlines
           panel.background = element_rect(fill = "white"),  # Set background to white
           panel.border = element_rect(color = "black", fill = NA, linewidth = 0.8), # Add a border around the plot
-          plot.title = element_text(hjust = 0.5)
     ) +
 
     scale_color_manual(
@@ -270,13 +245,19 @@ for(model in unique_models) {
         title.position = "top",
         title.hjust = 0.5)
     ) +
-    ylim(0, 800) +
-    xlim(0, 800)
+    ylim(0, 100) +
+    xlim(0, 100)
 
 }
 
-# Create an empty plot
-empty_plot <- ggplot() +
+# calculate distance from 1:1 line
+
+df_merged <- df_merged %>%
+  filter(model_name == "Multi-model mean") %>%
+  mutate(distance_from_1to1 = (median_count - median_count_obs) / sqrt(2))
+
+# save plot
+empty_plot <- ggplot() + # add letter to empty space in plot
   theme_void() +
   ggtitle("")  # remove any default title
 plots_with_empty <- c(plots, list(empty_plot))
@@ -287,9 +268,12 @@ all <- ggarrange(plotlist = plots_with_empty,
                  common.legend = TRUE, # have just one common legend
                  legend= "bottom")
 
-ggsave("IPCC_regions_maxCWD.png", path = "./", width = 11, height = 6, dpi= 600) # width = 8, height = 15
+ggsave("IPCC_regions_water-lim.png", path = "./", width = 11, height = 6, dpi= 600) # width = 8, height = 15,
 
-saveRDS(plots, "plot_list_maxCWD_IPCCregions.rds", compress = "xz")
+
+
+
+
 
 
 

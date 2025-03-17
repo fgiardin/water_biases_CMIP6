@@ -48,6 +48,9 @@ dt_count[na_locations, # Update the original data.table to set the values to NA 
                Intercept = NA_real_,
                count = NA_real_)]
 
+
+# plot --------------------------------------------------------------------
+
 plot_variable <- "count"
 
 # Define breaks for the color scale (around 10 breaks given the upper_threshold)
@@ -117,7 +120,7 @@ summary_merged <- summary_merged %>% # Add weights to the summary_merged datafra
   ) %>%
   dplyr::select(-lat1, -lat2, -gridsize)  # Clean up by removing intermediate columns
 
-saveRDS(summary_merged, "summary_merged.rds", compress = "xz")
+saveRDS(summary_merged, "summary_merged_watlim.rds", compress = "xz")
 
 
 # Get the list of unique scenarios
