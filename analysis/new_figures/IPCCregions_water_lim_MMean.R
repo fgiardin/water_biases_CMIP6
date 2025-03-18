@@ -47,7 +47,8 @@ MMmeans <- dt_count %>%
   mutate(model_name = "Multi-model mean") # add model name to mirror summary_deltaSM
 
 dt_count <- dt_count %>% # bind rows to original dt
-  bind_rows(MMmeans)
+  bind_rows(MMmeans) %>%
+  dplyr::select(-theta_crit, -EFmax, -Slope, -Intercept)
 
 # load IPCC data
 IPCC_mask <- rast("data-raw/IPCC_regions/ar6_land_regions_g025_2D.nc")
@@ -93,7 +94,7 @@ df_IPCC <- df_IPCC %>%
 # merge to count df
 df_plot <- dt_count %>%
   left_join(df_IPCC, by = join_by(lon, lat)) %>%
-  drop_na() %>%
+  # drop_na() %>%
   group_by(Region, model_name) %>% # in every IPCC cell and per every model, calculate mean/median count
   # dplyr::filter(n() >= 10) %>% # only retain Regions with values from at least 10 grid cells
   summarise(median_count = mean(count, na.rm = TRUE)) %>%
@@ -210,7 +211,8 @@ for(model in unique_models) {
     labs(x = "Observations (%)",
          y = paste(model, "(%)"), # Adding (%) to the y-axis title
          color = "IPCC WGI reference regions", # legend title
-         shape = "IPCC WGI reference regions"
+         shape = "IPCC WGI reference regions",
+         title = "Frequency of water limitation"
     ) +
     theme_minimal(base_size = 14) +  # consistently increase base font
     theme(axis.ticks = element_line(color = "black"), # add axes ticks
@@ -218,6 +220,7 @@ for(model in unique_models) {
           panel.grid.minor = element_blank(),  # Remove minor gridlines
           panel.background = element_rect(fill = "white"),  # Set background to white
           panel.border = element_rect(color = "black", fill = NA, linewidth = 0.8), # Add a border around the plot
+          plot.title = element_text(size = 14, hjust = 0.5)
     ) +
 
     scale_color_manual(
