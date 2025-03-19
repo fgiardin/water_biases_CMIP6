@@ -274,6 +274,12 @@ all <- ggarrange(plotlist = plots_with_empty,
 ggsave("IPCC_regions_water-lim.png", path = "./", width = 11, height = 6, dpi= 600) # width = 8, height = 15,
 
 
+# original phrasing in text
+# The most affected include the Congo rainforest (CAF) and Southern Africa (WSAF, ESAF),
+# Australia (SAU, EAU, CAU), the Amazon (NWS, NSA, SAM) and the Southern Cone (SSA, SWS),
+# and also Eastern Central Asia (ECA) (Fig. 2).
+
+
 
 
 

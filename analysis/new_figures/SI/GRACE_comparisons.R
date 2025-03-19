@@ -96,12 +96,12 @@ summary_deltaSM_MMmeans <- bind_rows(summary_deltaSM_land_hist, MMmeans)
 GLDAS_modified <- GLDAS %>% # Process GLDAS: rename, add empty column and model_name
   rename(deltaSMmax = dsmldas_max) %>%
   mutate(deltaSMabs = NA,      # add empty column (NA values)
-         model_name = "GLDAS")
+         model_name = "GLDAS_CLSM025_DA1_D")
 
 GLWS_modified <- GLWS %>% # Process GLWS: rename, add empty column and model_name
   rename(deltaSMmax = dsmgw_max) %>%
   mutate(deltaSMabs = NA,      # add empty column (NA values)
-         model_name = "GLWS")
+         model_name = "GLWS2.0")
 
 summary_deltaSM_MMmeans <- bind_rows(summary_deltaSM_MMmeans, # Bind the modified GLDAS and GLWS rows to the existing summary_deltaSM_MMmeans
                                      GLDAS_modified,
@@ -109,7 +109,9 @@ summary_deltaSM_MMmeans <- bind_rows(summary_deltaSM_MMmeans, # Bind the modifie
 
 # Merge with GRACE data (by lon and lat) to allow computation of statistics
 summary_merged <- summary_deltaSM_MMmeans %>%
-  full_join(grace_data, by = join_by(lon, lat), suffix = c("", "_GRACE"))
+  full_join(grace_data,
+            by = join_by(lon, lat),
+            suffix = c("", "_GRACE"))
 
 # Calculate grid weights for the bias computation (using a 2.5° resolution)
 res <- 2.5
@@ -133,7 +135,7 @@ ocean <- ne_download(scale = 50,
                      returnclass = "sf")
 
 # --- Define left models to compare with the multi-model mean ---
-left_obs <- c("GRACE observations", "GLDAS", "GLWS")
+left_obs <- c("GRACE observations", "GLDAS_CLSM025_DA1_D", "GLWS2.0")
 reference_model <- "Multi-model mean"
 
 # --- Initialize a list to store the 6 plots ---

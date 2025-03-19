@@ -224,8 +224,8 @@ for (scene in scenarios) {
       labs(title = ifelse(current_mdl == "Observations",
                           "ALEXI and WATCH-WFDEI observations", # change title instead of just "Observations"
                           current_mdl),
-           color = "Max CWD (mm)", # fill and color same label --> only one colorbar in the legend
-           fill = "Max CWD (mm)")
+           color = expression(paste(CWD[max], " (mm)")), # fill and color same label --> only one colorbar in the legend
+           fill = expression(paste(CWD[max], " (mm)")))
 
     # add stats for model panels
     if(current_mdl != "Observations") {
