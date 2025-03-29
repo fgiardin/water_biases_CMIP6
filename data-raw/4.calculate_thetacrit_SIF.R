@@ -72,7 +72,7 @@ vegetated_land <- ifel(
     )
   )
 )
-vegetated_land <- terra::resample(vegetated_land, SIF_rast)
+vegetated_land <- terra::resample(vegetated_land, SIF_rast, method="bilinear")
 SIF_rast <- mask(SIF_rast, vegetated_land)
 
 # only take data from 01/01/2007 to 01/12/2015 (9 full years)

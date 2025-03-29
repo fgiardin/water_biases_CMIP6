@@ -85,24 +85,42 @@ all <- (wrap_plots(plots_in_order, ncol = 5, nrow = 3) +
 
 
 ### Create plot of column titles
-obs_plot <- ggplot() + # Create the left title: "Observations"
-  theme_void() +
+obs_plot <- ggplot() +
+  # Right boundary line
+  annotate("segment", x = 1, xend = 1, y = 0, yend = 1, # y = 0.25, yend = 0.75,
+           color = "black", size = 1) +
+  # Text in the middle
   annotate("text", x = 0.5, y = 0.5,
            label = "Observations",
            size = 7.5, fontface = "bold", color = "black") +
-  labs(tag = "")
-
-models_plot <- ggplot() + # Create the right title: "CMIP6 models"
+  # Make sure ggplot shows the entire [0..1] range in both x and y
+  xlim(0, 1) +
+  ylim(0, 1) +
   theme_void() +
+  labs(tag = "")
+  # # Optionally disable clipping so nothing outside xlim/ylim is cut
+  # coord_cartesian(clip = "off") +
+
+  # theme(
+  #   plot.margin = margin(0, 0, 0, 0)  # remove outer margins if desired
+  # ) +
+
+
+
+models_plot <- ggplot() +
+  # annotate("rect", xmin = 0, xmax = 1, ymin = 0.25, ymax = 0.75,
+  #          color = "black", fill = NA, size = 1) +
   annotate("text", x = 0.5, y = 0.5,
            label = "CMIP6 models",
            size = 7.5, fontface = "bold", color = "#4D4D4D") +
+  theme_void() +
   labs(tag = "")
+
 
 # Combine the two plots into one row
 title_row <- obs_plot + models_plot +
   plot_layout(ncol = 2, widths = c(1.3, 4)) # ensure proportions with the rest of the plot
-
+title_row
 
 ### Combine the title row and the main grid using cowplot
 # final_plot <- title_row / all +
