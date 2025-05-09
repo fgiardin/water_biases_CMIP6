@@ -16,7 +16,6 @@ sf_use_s2(FALSE)
 
 # Load and prepare data ---------------------------------------------------
 
-# --- User-defined parameters ---
 plot_variable <- "deltaSMmax"  # or "deltaSMabs" if desired
 upper_threshold <- 1000
 interval <- upper_threshold / 9
