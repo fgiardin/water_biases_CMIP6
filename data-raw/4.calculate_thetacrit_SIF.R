@@ -167,7 +167,7 @@ GRACE_norm <- (GRACE - GRACEmin) / (GRACEmax - GRACEmin)
 GRACE_final <- ifel(GRACE_norm > 0, GRACE_norm, NA) # remove instances when total soil moisture = 0 (not physically meaningful)
 
 # resample GRACE to match CMIP6
-P <- rast("data-raw/cmip6-ng/pr/mon/pr_mon_CESM2_land-hist_r1i1p1f1_g025.nc")
+P <- rast("data-raw/cmip6-ng/pr/mon/g025/pr_mon_CESM2_land-hist_r1i1p1f1_g025.nc")
 P <- terra::rotate(P)
 GRACE_final <- terra::resample(GRACE_final, P[[1]])
 
