@@ -210,8 +210,18 @@ df_GLDAS_long <- df_GLDAS %>% # pivot_longer with data.table (faster)
          date = floor_date(date, "month") # floor (round) date at the first of the month (so we can merge with SIF)
   )
 
+# save everything to speed up workflow
+saveRDS(df_GRACE_long, "df_GRACE_long.rds", compress = "xz")
+saveRDS(df_GLWS_long, "df_GLWS_long.rds", compress = "xz")
+saveRDS(df_GLDAS_long, "df_GLDAS_long.rds", compress = "xz")
+
 
 # put together and plot: GLWS ---------------------------------------------------
+
+# load dataframes
+df_GRACE_long <- readRDS("data/Comparisons_GRACE/water_limitation/df_GRACE_long.rds")
+df_GLWS_long <- readRDS("data/Comparisons_GRACE/water_limitation/df_GLWS_long.rds")
+df_GLDAS_long <- readRDS("data/Comparisons_GRACE/water_limitation/df_GLDAS_long.rds")
 
 # merge
 df_merged_GLWS <- inner_join(
@@ -263,16 +273,6 @@ scatter_GLWS <- ggplot(df_merged_GLWS, aes(x = TWS_GRACE, y = TWS_GLWS)) +
            fontface   = "bold",
            label.size = 0.2                   # box border thickness
   ) +
-  # annotate(
-  #   "text",
-  #   x    = min(df_merged$TWS_GRACE, na.rm = TRUE),
-  #   y    = max(df_merged$TWS_GLWS, na.rm = TRUE),
-  #   hjust = 0, vjust = 1,
-  #   label = sprintf(
-  #     "R²    = %.2f\nrRMSE = %.2f\nrBias = %.2f",
-  #     r2, rRMSE, rBias
-  #   )
-  # ) +
   theme_minimal() +
   theme(plot.title = element_text(hjust = 0.5))
 
@@ -287,7 +287,9 @@ df_model <- df_merged_GLWS %>%
   group_by(lon, lat) %>%
   summarize(
     # R2 of TWS_GLWS ~ TWS_GRACE
-    count = cor(TWS_GLWS, TWS_GRACE, use = "complete.obs")^2,
+    count = cor(TWS_GLWS, TWS_GRACE,
+                # method = "spearman", # calculate Spearman’s ρ² (rho squared) (if commented, it will just calculate R2)
+                use = "complete.obs")^2,
     .groups = "drop"
   )
 
@@ -307,7 +309,7 @@ p <- ggplot() +
     expand = FALSE
   ) +
   scale_fill_gradient(
-    name   = expression(R^2),
+    name   = expression(R^2), # expression(R^2), expression(rho^2),
     low    = "gray80",    # very light
     high   = "#00008B",      # dark
     limits = c(0, 1),     # force legend to span 0–1
@@ -335,7 +337,7 @@ p <- ggplot() +
     legend.title     = element_text(size = 15),
     legend.key.width = unit(2.5, "cm"),
     legend.key.height= unit(0.4, "cm"),
-    panel.border     = element_rect(colour = "black", fill = NA, size = 0.5),
+    panel.border     = element_rect(colour = "black", fill = NA, linewidth = 0.5),
     panel.background = element_rect(fill = "white", colour = NA),
     plot.margin      = unit(c(0, -0.3, 0.3, -0.6), "cm")
   ) +
@@ -399,16 +401,6 @@ scatter_GLDAS <- ggplot(df_merged_GLDAS, aes(x = TWS_GRACE, y = TWS_GLDAS)) +
            fontface   = "bold",
            label.size = 0.2                   # box border thickness
   ) +
-  # annotate(
-  #   "text",
-  #   x    = min(df_merged_GLDAS$TWS_GRACE, na.rm = TRUE),
-  #   y    = max(df_merged_GLDAS$TWS_GLDAS, na.rm = TRUE),
-  #   hjust = 0, vjust = 1,
-  #   label = sprintf(
-  #     "R²    = %.2f\nrRMSE = %.2f\nrBias = %.2f",
-  #     r2, rRMSE, rBias
-  #   )
-  # ) +
   theme_minimal() +
   theme(plot.title = element_text(hjust = 0.5))
 
@@ -422,8 +414,10 @@ ggsave("scatter_GRACE-GLDAS.png", scatter_GLDAS,
 df_model_GLDAS <- df_merged_GLDAS %>%
   group_by(lon, lat) %>%
   summarize(
-    count = cor(TWS_GLDAS, TWS_GRACE, use = "complete.obs")^2,
-    .groups = "drop"
+    count = cor(TWS_GLDAS, TWS_GRACE,
+                # method = "spearman", # calculate Spearman’s ρ² (rho squared) (if commented, it will just calculate R2)
+                use = "complete.obs")^2,
+    .groups = "drop" # ungroup
   )
 
 # coastline for land outlines
@@ -439,7 +433,7 @@ p_GLDAS <- ggplot() +
            ylim = c(-60, 88),
            expand = FALSE) +
   scale_fill_gradient(
-    name   = expression(R^2),
+    name   = expression(R^2), # expression(R^2), expression(rho^2),
     low    = "gray80",    # very light
     high   = "#00008B",      # dark
     limits = c(0, 1),     # force legend to span 0–1
@@ -467,7 +461,7 @@ p_GLDAS <- ggplot() +
     legend.title     = element_text(size = 15),
     legend.key.width = unit(2.5, "cm"),
     legend.key.height= unit(0.4, "cm"),
-    panel.border     = element_rect(colour = "black", fill = NA, size = 0.5),
+    panel.border     = element_rect(colour = "black", fill = NA, linewidth = 0.5),
     panel.background = element_rect(fill = "white", colour = NA),
     plot.margin      = unit(c(0, -0.3, 0.3, -0.6), "cm")
   ) +

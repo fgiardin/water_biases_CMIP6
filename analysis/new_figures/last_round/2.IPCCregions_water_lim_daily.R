@@ -6,51 +6,40 @@ library(tidyverse)
 library(terra)
 library(ggpubr)
 library(data.table)
+library(scales)
 
-# load plot data
-df_count_GRACE <- readRDS("data/theta_crit/monthly/df_count_GRACE.rds") %>%
-  dplyr::select(-date, -SIF, -TWS) %>%  # remove temporal values
-  unique() %>%
-  mutate(model = "Observations")
+# load count data for flux and cmip6 daily
+df_count_raw <- readRDS("data/theta_crit/cmip6_daily_theta_crit_count.rds")
+df_count_flux_raw <- readRDS("data/flux_data/theta_crit_flux_norm.rds")
+df_key <- readRDS("data/flux_data/df_key.rds")
 
-df_count_mrso <- readRDS("data/theta_crit/monthly/df_count_mrso_allscenarios.rds") %>%
-  dplyr::filter(scenario == "land-hist") %>%
-  dplyr::select(-date, -EF, -Rn, -mrso, -mrso_norm, -scenario) %>%
+df_count_flux <- df_count_flux_raw %>%
+  # keep only rows with meaningful intercept (when the relationship decreases)
+  dplyr::mutate(count = ifelse(Intercept < EFmax - 0.3, count, 0)) %>%
+  dplyr::select(sitename, count) %>%
+  mutate(model = "FLUXNET2015") %>%
   unique()
 
-dt_count <- bind_rows(df_count_mrso, df_count_GRACE) %>%   # NAs = cells where the segmented function couldn't find a breakpoint (not enough data at that cell)
-  rename(model_name = model) %>%
-  mutate(count = count*100) %>%
-  mutate(count = ifelse(Intercept < EFmax,
-                        count, # keep only rows with meaningful intercept (when the EF vs SM relationship decreases)
-                        0))   # this way 0s represent locations that are never water-limited according to our definition!
-
-
-# make sure all models have same cells that are NA
-setDT(dt_count) # Convert to data.table if it's not already
-na_locations <- unique(dt_count[is.na(theta_crit), .(lon, lat)]) # Identify all unique lon and lat combinations where any of the columns of interest are NA
-dt_count[na_locations, # Update the original data.table to set the values to NA for the identified lon and lat, for all models
-         on = .(lon, lat),
-         `:=` (theta_crit = NA_real_,
-               EFmax = NA_real_,
-               Slope = NA_real_,
-               Intercept = NA_real_,
-               count = NA_real_)]
-
-# calculate multi-model mean
-MMmeans <- dt_count %>%
-  dplyr::filter(model_name != "Observations") %>%
-  group_by(lon, lat) %>%
-  summarise(
-    count = mean(count, na.rm = TRUE)
-  ) %>%
+df_count_models <- df_count_raw %>%
+  # keep only rows with meaningful intercept (when the EF vs SM relationship decreases)
+  dplyr::mutate(count = ifelse(Intercept < EFmax - 0.3, count, 0)) %>%
+  dplyr::select(sitename, model, count) %>%
+  unique() %>%
+  group_by(sitename) %>%
+  summarize(count = mean(count)) %>%  # calculate multi-model mean
   ungroup() %>%
-  mutate(model_name = "Multi-model mean") # add model name to mirror summary_deltaSM
+  mutate(model = "CMIP6 multi-model mean")
 
-dt_count <- dt_count %>% # bind rows to original dt
-  bind_rows(MMmeans) %>%
-  dplyr::select(-theta_crit, -EFmax, -Slope, -Intercept)
+df_count_flux_models <- rbind(df_count_models, df_count_flux)
 
+# attach back the lon lat
+df_count_flux_models <- df_count_flux_models %>%
+  left_join(
+  df_count_flux_raw %>%
+    dplyr::select(sitename, lon, lat) %>%
+    distinct(),   # ensure one row per site
+  by = "sitename") %>%
+  dplyr::select(sitename, lon, lat, model, count)
 
 # process and merge data --------------------------------------------------
 
@@ -93,25 +82,43 @@ df_IPCC <- df_IPCC %>%
   dplyr::filter(ID > 0)
 
 # merge to count df
-df_plot <- dt_count %>%
-  left_join(df_IPCC, by = join_by(lon, lat)) %>%
-  # drop_na() %>%
-  group_by(Region, model_name) %>% # in every IPCC cell and per every model, calculate mean/median count
+df_plot <- df_count_flux_models %>%
+  # first match location of fluxsites with grid cells of IPCC regions
+  rowwise() %>%
+  mutate(
+    # compute squared distance to every grid cell
+    .closest = which.min((df_IPCC$lon - lon)^2 + (df_IPCC$lat - lat)^2),
+    # pull out the matching Region
+    Region   = df_IPCC$Region[.closest]
+  ) %>%
+  ungroup() %>%
+  dplyr::select(-.closest) %>%
+
+  # remove regions that had just one match with flux site (too low representativeness)
+  group_by(Region) %>%        # for each region …
+  filter(n() > 2) %>%         # … only keep it if it has more than 2 rows …
+  ungroup() %>%
+
+  # then calculate mean within each grid cell
+  rename(model_name = model) %>%
+  # in every IPCC cell and per every model, calculate mean/median count
+  group_by(Region, model_name) %>%
   # dplyr::filter(n() >= 10) %>% # only retain Regions with values from at least 10 grid cells
   summarise(median_count = mean(count, na.rm = TRUE)) %>%
   ungroup()
 
-# Filter out the data for the observations (count based on SIF vs GRACE)
-grace_data <- df_plot %>%
-  filter(model_name == "Observations") %>%
-  dplyr::select(-model_name) # remove model name column (as GRACE data will have its own column in df_merged)
 
-# Create a new (repeated for every model) column with GRACE data in the original dataframe
-df_merged <- full_join(df_plot %>% dplyr::filter(model_name != "Observations"), # remove GRACE in the original dataframe to avoid repetitions
+# Filter out the data for the observations
+grace_data <- df_plot %>%
+  filter(model_name == "FLUXNET2015") %>%
+  dplyr::select(-model_name) # remove model name column (as OBS data will have its own column in df_merged)
+
+# Create a new (repeated for every model) column with OBS data in the original dataframe
+df_merged <- full_join(df_plot %>% dplyr::filter(model_name != "FLUXNET2015"), # remove OBS in the original dataframe to avoid repetitions
                        grace_data, by = "Region",
                        suffix = c("", "_obs")) # rename new column "count" + "_obs"
 
-# Get the unique model names (excluding .GRACE) and create scatter plots.
+# Get the unique model names (excluding .OBS) and create scatter plots.
 unique_models <- unique(df_merged$model_name)
 
 # Extract unique regions from df_merged
@@ -177,6 +184,9 @@ for (macro_region in names(macro_regions)) {
 }
 
 df_merged <- df_merged %>%
+  mutate(model_name = "Multi-model mean",
+         median_count = median_count*100,
+         median_count_obs = median_count_obs*100) %>%
   drop_na()
 
 
@@ -209,7 +219,7 @@ for(model in unique_models) {
     # Add the scatter plot points
     geom_point(size = 2) +  # Add the scatter plot points
     geom_abline(intercept = 0, slope = 1, linetype = "dashed", color = "black") +  # Add the y=x dashed line
-    labs(x = "Observations (%)",
+    labs(x = "FLUXNET2015 (%)",
          y = paste(model, "(%)"), # Adding (%) to the y-axis title
          color = "IPCC WGI reference regions", # legend title
          shape = "IPCC WGI reference regions",
@@ -255,7 +265,6 @@ for(model in unique_models) {
 }
 
 # calculate distance from 1:1 line
-
 df_merged <- df_merged %>%
   filter(model_name == "Multi-model mean") %>%
   mutate(distance_from_1to1 = (median_count - median_count_obs) / sqrt(2))
@@ -272,13 +281,8 @@ all <- ggarrange(plotlist = plots_with_empty,
                  common.legend = TRUE, # have just one common legend
                  legend= "bottom")
 
-ggsave("IPCC_regions_water-lim.png", path = "./", width = 11, height = 6, dpi= 600) # width = 8, height = 15,
+ggsave("IPCC_regions_water-lim.png", path = "./", width = 11, height = 5, dpi= 600) # width = 8, height = 15,
 
-
-# original phrasing in text
-# The most affected include the Congo rainforest (CAF) and Southern Africa (WSAF, ESAF),
-# Australia (SAU, EAU, CAU), the Amazon (NWS, NSA, SAM) and the Southern Cone (SSA, SWS),
-# and also Eastern Central Asia (ECA) (Fig. 2).
 
 
 

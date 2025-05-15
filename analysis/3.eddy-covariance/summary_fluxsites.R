@@ -18,7 +18,7 @@ df_count_flux <- df_count_flux_raw %>%
   mutate(model = "FLUXNET2015") %>%
   unique()
 
-df_count <- df_count_raw %>%
+df_count_models <- df_count_raw %>%
   # keep only rows with meaningful intercept (when the EF vs SM relationship decreases)
   dplyr::mutate(count = ifelse(Intercept < EFmax - 0.3, count, 0)) %>%
   dplyr::select(sitename, model, count) %>%
@@ -28,7 +28,7 @@ df_count <- df_count_raw %>%
   ungroup() %>%
   mutate(model = "CMIP6 multi-model mean")
 
-df <- rbind(df_count, df_count_flux)
+df <- rbind(df_count_models, df_count_flux)
 
 # create 2 panels to plot
 df <- df[order(df$sitename), ] # sort the dataframe by 'sitename'

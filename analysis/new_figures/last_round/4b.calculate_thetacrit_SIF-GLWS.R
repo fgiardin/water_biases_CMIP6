@@ -1,4 +1,4 @@
-# script to calculate theta_crit in SIF/SIFmax vs GRACE plots
+# script to calculate theta_crit in SIF/SIFmax vs GRACE alternative products (GLWS/GLDAS)
 # to be compared to EF vs SM (mrso, total column soil moisture) from CMIP6
 
 # load libraries
@@ -119,22 +119,23 @@ df_SIF_long <- df_SIF %>%
 # saveRDS(df_SIF_long, "df_SIF.rds", compress = "xz")
 
 
-# GRACE processing --------------------------------------------------------
+# GLWS processing --------------------------------------------------------
 
-# process data
-GRACE_raw <- rast("data-raw/GRACE/GRCTellus.JPL.200204_202304.GLO.RL06.1M.MSCNv03CRI.nc", "lwe_thickness") # liquid water equivalent
-plot(GRACE_raw[[1]])
+GLWS_all <- rast("data-raw/GLWS/v2.0/0.5deg_lat-lon_1m/original/GLWS_2_0_2003-2019.nc")
+GLWS_TWS <- rast("data-raw/GLWS/v2.0/0.5deg_lat-lon_1m/original/GLWS_2_0_2003-2019.nc", "Total water storage anomalies")
+GLWS_surf <- rast("data-raw/GLWS/v2.0/0.5deg_lat-lon_1m/original/GLWS_2_0_2003-2019.nc", "Surface water")
+
+GLWS_raw <- GLWS_TWS - GLWS_surf
+GLWS <- GLWS_raw
 
 # extract dates
-dates <- terra::time(GRACE_raw) # monthly data 2002-2023
-
-# # match dates with CMIP
-# selection <- which(dates >= as.POSIXct("2003-01-01") &
-#                      dates <= as.POSIXct("2014-12-31"))
-# GRACE_raw <- subset(GRACE_raw, subset = selection)
-
-# rotate to true coordinates (-180;180 instead of 0;360)
-GRACE <- terra::rotate(GRACE_raw)
+nc <- nc_open("data-raw/GLWS/v2.0/0.5deg_lat-lon_1m/original/GLWS_2_0_2003-2019.nc")
+tvals      <- ncvar_get(nc, "time") # read the raw time values + units
+time_units <- ncatt_get(nc, "time", "units")$value # expressed in years (no comment)
+nc_close(nc)
+years  <- floor(tvals) # extract year and month
+months <- round((tvals - years) * 12 + 0.5)
+dates  <- as.Date(sprintf("%04d-%02d-01", years, months)) # build a proper Date vector (effort!)
 
 # focus on vegetated land
 land_cover_raw <- rast("data-raw/landcover/landcover_MCD12C1.nc") # load land cover
@@ -153,31 +154,29 @@ vegetated_land <- ifel( # only keep vegetated land
     )
   )
 )
-vegetated_land <- terra::resample(vegetated_land, GRACE) # resample land_cover to match water_balance
-GRACE <- mask(GRACE, vegetated_land) # remove all pixels that are NAs in land_cover
-GRACE
-plot(GRACE[[1]])
+vegetated_land <- terra::resample(vegetated_land, GLWS) # resample land_cover to match GLWS
+GLWS <- mask(GLWS, vegetated_land) # remove all pixels that are NAs in land_cover
+GLWS
+plot(GLWS[[1]])
 plot(vegetated_land)
 
 # normalize TWS by location (to compare it with flux SM)
-GRACEmax <- max(GRACE, na.rm = TRUE)
-GRACEmin <- min(GRACE, na.rm = TRUE)
+GLWSmax <- max(GLWS, na.rm = TRUE)
+GLWSmin <- min(GLWS, na.rm = TRUE)
 
-GRACE_norm <- (GRACE - GRACEmin) / (GRACEmax - GRACEmin)
-GRACE_final <- ifel(GRACE_norm > 0, GRACE_norm, NA) # remove instances when total soil moisture = 0 (not physically meaningful)
+GLWS_norm <- (GLWS - GLWSmin) / (GLWSmax - GLWSmin)
+GLWS_final <- ifel(GLWS_norm > 0, GLWS_norm, NA) # remove instances when total soil moisture = 0 (not physically meaningful)
 
-# resample GRACE to match CMIP6
+# resample GLWS to match CMIP6
 P <- rast("data-raw/cmip6-ng/pr/mon/g025/pr_mon_CESM2_land-hist_r1i1p1f1_g025.nc")
 P <- terra::rotate(P)
-GRACE_final <- terra::resample(GRACE_final, P[[1]])
+GLWS_final <- terra::resample(GLWS_final, P[[1]])
 
 # transform to dataframe
-df_GRACE <- terra::as.data.frame(GRACE_final, xy = TRUE) # xy =TRUE keeps the spatial coordinates
-dates <- terra::time(GRACE_final)
+df_GLWS <- terra::as.data.frame(GLWS_final, xy = TRUE) # xy =TRUE keeps the spatial coordinates
+names(df_GLWS) <- c("lon", "lat", as.character(dates))
 
-names(df_GRACE) <- c("lon", "lat", as.character(dates))
-
-df_GRACE_long <- df_GRACE %>% # pivot_longer with data.table (faster)
+df_GLWS_long <- df_GLWS %>% # pivot_longer with data.table (faster)
   data.table() %>%
   melt(
     measure.vars = as.character(dates), # name of the columns to be pivoted
@@ -186,7 +185,8 @@ df_GRACE_long <- df_GRACE %>% # pivot_longer with data.table (faster)
   ) %>%
   mutate(date = lubridate::date(as.character(date)),
          date = floor_date(date, "month") # floor (round) date at the first of the month (so we can merge with SIF)
-         )
+  )
+
 
 
 
@@ -194,8 +194,8 @@ df_GRACE_long <- df_GRACE %>% # pivot_longer with data.table (faster)
 
 # merge two dataframes and create a new column (to use the function "fit_bilinear_from_combination")
 dt_final <- df_SIF_long %>%
-  left_join(df_GRACE_long,
-    by = join_by(lon, lat, date)) %>%
+  left_join(df_GLWS_long,
+            by = join_by(lon, lat, date)) %>%
   mutate(model = "OBS") %>%
   drop_na() %>%
   dplyr::filter(date < "2015-01-01") # keep dates until 2014-12-31 (consistent with CMIP6)
@@ -213,26 +213,26 @@ combinations_dt <- unique(dt_final[, .(model, lon, lat)])
 source("R/fit_bilinear.R")
 source("R/fit_bilinear_from_combination.R")
 
-results_list_GRACE <- mclapply(1:nrow(combinations_dt), function(i) {
+results_list_GLWS <- mclapply(1:nrow(combinations_dt), function(i) {
 
   fit_bilinear_from_combination(combinations_dt[i], split_data, "SIF", "TWS")
 
 }, mc.cores = num_cores)
 
 # Filter out list elements that are not data.frames or data.tables
-filtered_list <- results_list_GRACE[sapply(results_list_GRACE, function(x) is.data.frame(x) || is.data.table(x))]
+filtered_list <- results_list_GLWS[sapply(results_list_GLWS, function(x) is.data.frame(x) || is.data.table(x))]
 
 # unnest dataframe for plotting
-map_theta_crit_SIF_GRACE <- rbindlist(filtered_list, fill = TRUE)
+map_theta_crit_SIF_GLWS <- rbindlist(filtered_list, fill = TRUE)
 
 
-saveRDS(map_theta_crit_SIF_GRACE, "theta_crit_GRACE.rds", compress = "xz")
+saveRDS(map_theta_crit_SIF_GLWS, "theta_crit_GLWS.rds", compress = "xz")
 
 
 
 # count frequency of SM limitation ----------------------------
 df_count <- dt_final %>%
-  left_join(map_theta_crit_SIF_GRACE, by = join_by(lon, lat, model)) %>%
+  left_join(map_theta_crit_SIF_GLWS, by = join_by(lon, lat, model)) %>%
   dplyr::select(-model) %>%
   group_by(lon, lat) %>%
   mutate(
@@ -243,6 +243,6 @@ df_count <- dt_final %>%
   ) %>%
   ungroup()
 
-saveRDS(df_count, "df_count_GRACE.rds", compress = "xz")
+saveRDS(df_count, "df_count_GLWS.rds", compress = "xz")
 
 

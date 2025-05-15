@@ -80,29 +80,30 @@ ypos_sub <- 0.99
 # Plot
 a_plot <- ggplot(df_merged, aes(x = SM, y = SM_GRACE)) +
   geom_point(alpha = 0.5) +                         # all points
-  geom_point(data = df_sub, aes(x = SM, y = SM_GRACE),   # highlight subset in green
-             color = "forestgreen", size = 2, alpha = 0.5) +
-  geom_abline(slope = 1, intercept = 0, linetype = "dashed") +           # 1:1 line
-  geom_smooth(method = "lm", se = FALSE, color = "red") +          # regression line
+  # geom_point(data = df_sub, aes(x = SM, y = SM_GRACE),   # highlight subset in green
+  #            color = "forestgreen", size = 2, alpha = 0.5) +
+  geom_abline(slope = 1, intercept = 0, linetype = "dashed", color = "red", linewidth = 1) +           # 1:1 line
+  geom_smooth(method = "lm", se = FALSE, color = "blue") +          # regression line
   annotate("text",
            x = xpos, y = ypos,
            hjust = 0, vjust = 1,
+           # color = "red",
            label = paste0(
              "R² = ",  round(stats$R2,   2), "\n",
-             "rBias = ", round(stats$rBias, 3), "\n",
-             "rRMSE = ",round(stats$rRMSE,3)
+             "rBias = ", round(stats$rBias, 2), "\n",
+             "rRMSE = ",round(stats$rRMSE, 2)
            )
   ) +
-  annotate("text",
-           x = xpos_sub, y = ypos_sub,
-           hjust = 0, vjust = 1,
-           color = "forestgreen",
-           label = paste0(
-             "R² = ", round(stats_sub$R2,   2), "\n",
-             "rBias = ", round(stats_sub$rBias, 3), "\n",
-             "rRMSE = ",round(stats_sub$rRMSE,3)
-           )
-  ) +
+  # annotate("text",
+  #          x = xpos_sub, y = ypos_sub,
+  #          hjust = 0, vjust = 1,
+  #          color = "forestgreen",
+  #          label = paste0(
+  #            "R² = ", round(stats_sub$R2,   2), "\n",
+  #            "rBias = ", round(stats_sub$rBias, 3), "\n",
+  #            "rRMSE = ",round(stats_sub$rRMSE,3)
+  #          )
+  # ) +
   labs(
     x = "SPLASH soil moisture (-)",
     y = "GRACE daily (-)"
@@ -111,7 +112,7 @@ a_plot <- ggplot(df_merged, aes(x = SM, y = SM_GRACE)) +
 
 
 ggsave("GRACE_daily_flux_comparison.png", plot = a_plot,
-       width = 6, height = 6, dpi = 600)
+       width = 4, height = 4, dpi = 600)
 
 
 
