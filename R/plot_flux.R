@@ -13,10 +13,10 @@ plot_flux <- function(df, site_name, show_x = TRUE, show_y = TRUE) {
     theme_minimal() +
     theme(
       axis.text.x = if(show_x) element_text(size = 14) else element_blank(),
-      axis.title.x = element_blank(), # if(show_x) element_text(size = 16) else element_blank(),
+      axis.title.x = if(show_x) element_text(size = 16) else element_blank(), # element_blank(), #
       axis.ticks.x = if(show_x) element_line(color = "black") else element_blank(), # add axes ticks
       axis.text.y = if(show_y) element_text(size = 14) else element_blank(),
-      axis.title.y = element_blank(), # if(show_y) element_text(size = 16) else element_blank(),
+      axis.title.y = if(show_y) element_text(size = 16) else element_blank(), # element_blank(), #
       axis.ticks.y = if(show_y) element_line(color = "black") else element_blank(), # add axes ticks
       legend.text = element_text(size = 14),
       plot.title = element_text(hjust = 0.5, size = 16),

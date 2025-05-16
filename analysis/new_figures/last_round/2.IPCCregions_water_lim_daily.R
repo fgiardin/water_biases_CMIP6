@@ -281,7 +281,7 @@ all <- ggarrange(plotlist = plots_with_empty,
                  common.legend = TRUE, # have just one common legend
                  legend= "bottom")
 
-ggsave("IPCC_regions_water-lim.png", path = "./", width = 11, height = 5, dpi= 600) # width = 8, height = 15,
+ggsave("IPCC_regions_water-lim.png", path = "./", width = 11, height = 4.7, dpi= 600) # width = 8, height = 15,
 
 
 

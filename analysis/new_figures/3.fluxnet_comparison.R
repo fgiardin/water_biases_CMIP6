@@ -46,7 +46,7 @@ plot_list[['site1_flux']] <- plot_flux(df_daily_flux, site1, show_x = FALSE, sho
 plot_list[['site2_flux']] <- plot_flux(df_daily_flux, site2, show_x = FALSE, show_y = TRUE) # show_x = FALSE, show_y = TRUE
 plot_list[['site3_flux']] <- plot_flux(df_daily_flux, site3, show_x = TRUE, show_y = TRUE) # show_x = TRUE, show_y = TRUE
 
-# Loop over models
+# models
 for (pmodel in plot_model) {
   # Filter data for the current model
   filtered_data <- df_daily_cmip6 %>% filter(model == pmodel)

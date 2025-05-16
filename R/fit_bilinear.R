@@ -2,9 +2,22 @@
 
 fit_bilinear <- function(data, y_var, x_var) {
 
-  # data <- df_count_raw %>% dplyr::filter(model == "CNRM-ESM2-1") %>% dplyr::filter(sitename == "CH-Dav")
-  # df_count_raw %>% dplyr::filter(model == "CNRM-ESM2-1") %>% dplyr::filter(sitename == "CH-Dav") %>% pull(count)
-  # df_count_raw %>% dplyr::filter(model == "CNRM-ESM2-1") %>% dplyr::filter(sitename == "CH-Dav") %>% pull(theta_crit)
+  # 1) ensure 'segmented' is installed
+  if (!requireNamespace("segmented", quietly = TRUE)) {
+    stop(
+      "The 'segmented' package is not installed.\n",
+      "Please install it with:\n",
+      "  install.packages('segmented')"
+    )
+  }
+  # 2) ensure it's loaded
+  if (!"segmented" %in% .packages()) {
+    stop(
+      "The 'segmented' package is installed but not loaded.\n",
+      "Please load it before calling fit_bilinear():\n",
+      "  library(segmented)"
+    )
+  }
 
   y <- data[[y_var]]
   x <- -(data[[x_var]]) # negative as per the definition of the segmented function (see documentation)
@@ -17,6 +30,17 @@ fit_bilinear <- function(data, y_var, x_var) {
     # return a list with the error if any
     return(list(error = paste("ERROR:", conditionMessage(e))))
   })
+
+  # # detect if segmented() failed and exit (uncomment if you have an error and the function can't run, this lets you see the error)
+  # if (!is.null(out.segmented$error)) {
+  #   return(data.table(
+  #     theta_crit = NA_real_,
+  #     EFmax      = NA_real_,
+  #     Slope      = NA_real_,
+  #     Intercept  = NA_real_,
+  #     error      = out.segmented$error
+  #   ))
+  # }
 
   theta_crit <- -out.segmented$psi[1,2] # setting positive again
   EFmax <- out.segmented[["coefficients"]][["(Intercept)"]] # intercept with y axis of flat line

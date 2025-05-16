@@ -16,6 +16,7 @@ library(ggnewscale) # to add multiple scales in same ggplot
 library(ggpubr)
 sf_use_s2(FALSE) # switch off spherical geometry
 library(data.table)
+library(matrixStats) # to calculate median of bias
 library(RColorBrewer)
 setwd("/Users/fgiardina/water_biases_CMIP6")
 
@@ -130,6 +131,25 @@ scenarios <- scenarios[!is.na(scenarios)]  # Remove NA if any
 # Create the list of panels to print
 model_list <- c("Observations", "Multi-model mean")
 
+# function for weighted median
+weighted_median <- function(x, w, na.rm = FALSE) {
+  if (na.rm) {
+    ok <- !(is.na(x) | is.na(w))
+    x <- x[ok]; w <- w[ok]
+  }
+  if (!length(x)) return(NA_real_)
+
+  o <- order(x)             # 1. sort the sample
+  x <- x[o]; w <- w[o]
+
+  cw <- cumsum(w) / sum(w)  # 2. cumulative weight ∈ [0,1]
+  idx <- which(cw >= 0.5)[1]# 3. first cell past 50 %
+  x[idx]                     # 4. that value *is* the weighted median
+}
+
+# list to collect the fraction of area affected by over/underestimation
+area_fraction_stats <- list()   # one element per scenario
+
 # Loop over each scenario
 for (scene in scenarios) {
 
@@ -180,6 +200,27 @@ for (scene in scenarios) {
         summarise(weighted_mean_bias = sum(mean_bias, na.rm = TRUE) / sum(weights, na.rm = TRUE)) %>%
         pull(weighted_mean_bias)
       mean_bias_tropics_label <- bquote(Bias[tropics] == .(round(mean_bias_tropics, 0)) * "%")
+
+     # median using weights
+      median_bias <- df_model %>%
+        filter(!is.na(count) & !is.na(count_GRACE) & !is.na(weights)) %>%
+        transmute(bias = count - count_GRACE, w = weights) %>%
+        summarise(weighted_median_bias = weighted_median(bias, w)) %>%
+        # mutate(bias = count - count_GRACE) %>%
+        # summarise(weighted_median_bias = weightedMedian(bias, w = weights, na.rm = TRUE)) %>%
+        pull(weighted_median_bias)
+      median_bias_label <- bquote("Median bias" == .(round(median_bias, 0)) * "%")
+
+      # median using weights: tropics
+      median_bias_tropics <- df_model %>%
+        filter(lat >= -23 & lat <= 23) %>%
+        filter(!is.na(count) & !is.na(count_GRACE) & !is.na(weights)) %>%
+        transmute(bias = count - count_GRACE, w = weights) %>%
+        summarise(weighted_median_bias = weighted_median(bias, w)) %>%
+        # mutate(bias = count - count_GRACE) %>%
+        # summarise(weighted_median_bias = weightedMedian(bias, w = weights, na.rm = TRUE)) %>%
+        pull(weighted_median_bias)
+      median_bias_tropics_label <- bquote("Median bias"[tropics] == .(round(median_bias_tropics, 0)) * "%")
     }
 
     # Plot global map for each model
@@ -240,10 +281,12 @@ for (scene in scenarios) {
     # add stats for models
     if(current_mdl != "Observations") {
       p <- p +
-        annotate("text", x = -175, y = -11, label = r_squared_label, hjust = 0, vjust = 0, size = 4.3) + # R2
-        annotate("text", x = -175, y = -25, label = mean_bias_label, hjust = 0, vjust = 0, size = 4.3) + # mean bias
-        annotate("text", x = -175, y = -40, label = mean_bias_tropics_label, hjust = 0, vjust = 0, size = 4.3) + # tropics
-        annotate("text", x = -175, y = -52, label = mean_bias_abs_label, hjust = 0, vjust = 0, size = 4.3) # abs(mean bias)
+        annotate("text", x = -175, y = 11, label = r_squared_label, hjust = 0, vjust = 0, size = 3.8) + # R2
+        annotate("text", x = -175, y = 0, label = median_bias_label, hjust = 0, vjust = 0, size = 3.8) + # median of bias
+        annotate("text", x = -175, y = -13,  label = median_bias_tropics_label, hjust = 0, vjust = 0, size = 3.8) + # median of bias in the tropics
+        annotate("text", x = -175, y = -25, label = mean_bias_label, hjust = 0, vjust = 0, size = 3.8) + # mean bias
+        annotate("text", x = -175, y = -40, label = mean_bias_tropics_label, hjust = 0, vjust = 0, size = 3.8) + # tropics
+        annotate("text", x = -175, y = -52, label = mean_bias_abs_label, hjust = 0, vjust = 0, size = 3.8) # abs(mean bias)
     }
 
     return(p)
