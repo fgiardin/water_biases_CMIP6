@@ -78,7 +78,6 @@ ocean <- ne_download(
   category = "physical",
   returnclass = "sf")
 
-
 # Sort the models alphabetically, keeping "Observations" first
 unique_models <- unique(dt_count$model_name) # Extract unique model names
 sorted_models <- c("Observations", sort(unique_models[unique_models != "Observations"]))
@@ -148,7 +147,7 @@ weighted_median <- function(x, w, na.rm = FALSE) {
 }
 
 # list to collect the fraction of area affected by over/underestimation
-area_fraction_stats <- list()   # one element per scenario
+area_fraction_stats <- list()   # one element per scenario XXXX
 
 # Loop over each scenario
 for (scene in scenarios) {
@@ -184,13 +183,28 @@ for (scene in scenarios) {
         pull(weighted_mean_bias_abs)
       mean_bias_abs_label <- bquote("|Bias|" == .(round(mean_bias_abs, 0)) * "%")
 
-      # calculate mean bias using weights
-      mean_bias <- df_model %>%
+      # calculate mean bias (raw bias) using weights
+      mean_bias_int <- df_model %>% # save intermediary raw bias to calculate percentages below
         filter(!is.na(count) & !is.na(count_GRACE) & !is.na(weights)) %>%
-        mutate(mean_bias = (count - count_GRACE) * weights) %>%
+        mutate(mean_bias = (count - count_GRACE) * weights)
+
+      mean_bias <- mean_bias_int %>%
         summarise(weighted_mean_bias = sum(mean_bias, na.rm = TRUE) / sum(weights), na.rm = TRUE) %>%
         pull(weighted_mean_bias)
       mean_bias_label <- bquote("Bias" == .(round(mean_bias, 0)) * "%")
+
+      # calculate %land affected by over and underestimation
+      raw_bias <- mean_bias_int$mean_bias
+      n_tot      <- length(raw_bias)
+      n_over     <- sum(raw_bias >  0, na.rm = TRUE)
+      n_under    <- sum(raw_bias <  0, na.rm = TRUE)
+
+      frac_df <- tibble(
+        scenario   = scene,
+        frac_over  = paste0(round(n_over  / n_tot * 100), "%"),
+        frac_under = paste0(round(n_under / n_tot * 100), "%")
+      )
+      print(frac_df)
 
       # bias focusing on tropics
       mean_bias_tropics <- df_model %>%
@@ -305,3 +319,5 @@ for (scene in scenarios) {
   filename <- paste0("map_count_", scene, "_MMmean.png")
   ggsave(filename, plot = all, path = "./", width = 12, height = 3.25, dpi = 300)
 }
+
+

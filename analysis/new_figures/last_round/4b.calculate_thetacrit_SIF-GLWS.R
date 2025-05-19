@@ -8,6 +8,7 @@ library(data.table)
 library(R.matlab)
 library(segmented)
 library(parallel)
+library(ncdf4)
 
 # data info
 # GRACE: monthly data 2002-2023

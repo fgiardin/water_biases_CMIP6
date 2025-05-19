@@ -48,11 +48,13 @@ process_moisture_thresholds <- function(model_name, scenario) {
         ifel(
           land_cover > 14,
           NA,
-          land_cover
+          1
         )
       )
     )
-    vegetated_land <- resample(vegetated_land, data_model)
+    vegetated_land <- resample(vegetated_land,
+                               data_model,
+                               method = "near") # nearest neighbor (categorical variable)
     data_model <- mask(data_model, vegetated_land)
 
     # Store the processed data

@@ -79,8 +79,8 @@ dt_final <- dt_allresults %>%
   setDT()
 
 # Load necessary functions for bilinear fitting
-source("R/fit_bilinear.R")
-source("R/fit_bilinear_from_combination.R")
+source("R/fit_bilinear_cmip6.R")
+source("R/fit_bilinear_from_combination_cmip6.R") # version that works for this application
 
 # Create combinations of model, scenario, lon, and lat
 combinations_dt <- unique(dt_final[, .(model, scenario, lon, lat)])

@@ -68,11 +68,13 @@ vegetated_land <- ifel(
     ifel(
       land_cover > 14,
       NA,
-      land_cover
+      1 # create binary mask (vegetation: yes or no?)
     )
   )
 )
-vegetated_land <- terra::resample(vegetated_land, SIF_rast, method="bilinear")
+vegetated_land <- terra::resample(vegetated_land,
+                                  SIF_rast,
+                                  method = "near") # nearest neighbor (categorical variable)
 SIF_rast <- mask(SIF_rast, vegetated_land)
 
 # only take data from 01/01/2007 to 01/12/2015 (9 full years)
@@ -97,7 +99,9 @@ SIFmax <- max(SIF_season, na.rm = TRUE) # recalculate maximum (with growing seas
 SIF_norm <- SIF_season / SIFmax # normalize each pixel
 
 # resample to match projection and extent of CMIP6
-SIF_norm <- terra::resample(SIF_norm, cmip6_world, method="bilinear")
+SIF_norm <- terra::resample(SIF_norm,
+                            cmip6_world,
+                            method="average")
 
 # transform to dataframe for plotting and merging with other data
 df_SIF <- terra::as.data.frame(SIF_norm, xy = TRUE)
@@ -123,7 +127,7 @@ df_SIF_long <- df_SIF %>%
 
 # process data
 GRACE_raw <- rast("data-raw/GRACE/GRCTellus.JPL.200204_202304.GLO.RL06.1M.MSCNv03CRI.nc", "lwe_thickness") # liquid water equivalent
-plot(GRACE_raw[[1]])
+# plot(GRACE_raw[[1]])
 
 # extract dates
 dates <- terra::time(GRACE_raw) # monthly data 2002-2023
@@ -149,15 +153,18 @@ vegetated_land <- ifel( # only keep vegetated land
     ifel(
       land_cover > 14, # 14 = Cropland/Natural Vegetation Mosaics (keep)
       NA,              # 15 = Permanent Snow and Ice, 16 = Barren
-      land_cover
+      1
     )
   )
 )
-vegetated_land <- terra::resample(vegetated_land, GRACE) # resample land_cover to match water_balance
+vegetated_land <- terra::resample(vegetated_land, # resample land_cover to match GRACE
+                                  GRACE,
+                                  method = "near") # nearest neighbor
+
 GRACE <- mask(GRACE, vegetated_land) # remove all pixels that are NAs in land_cover
-GRACE
-plot(GRACE[[1]])
-plot(vegetated_land)
+# GRACE
+# plot(GRACE[[1]])
+# plot(vegetated_land)
 
 # normalize TWS by location (to compare it with flux SM)
 GRACEmax <- max(GRACE, na.rm = TRUE)
@@ -169,7 +176,9 @@ GRACE_final <- ifel(GRACE_norm > 0, GRACE_norm, NA) # remove instances when tota
 # resample GRACE to match CMIP6
 P <- rast("data-raw/cmip6-ng/pr/mon/g025/pr_mon_CESM2_land-hist_r1i1p1f1_g025.nc")
 P <- terra::rotate(P)
-GRACE_final <- terra::resample(GRACE_final, P[[1]])
+GRACE_final <- terra::resample(GRACE_final,
+                               P[[1]],
+                               method = "average") # calculating the average instead of bilinear interpolation since we're decreasing the resolution!!
 
 # transform to dataframe
 df_GRACE <- terra::as.data.frame(GRACE_final, xy = TRUE) # xy =TRUE keeps the spatial coordinates
