@@ -75,6 +75,7 @@ full_region_names <- c('GIC'  = 'Greenland/Iceland', 'NWN'  = 'N.W.North-America
                        'NZ'   = 'New-Zealand', 'EAN'  = 'E.Antarctica', 'WAN'  = 'W.Antarctica')
 numbers <- 0:45
 df <- data.frame(ID = numbers, Region = regions)
+all_regions <- regions
 
 # merge to original IPCC df
 df_IPCC <- df_IPCC %>%
@@ -169,19 +170,18 @@ names(region_colors) <- filtered_regions
 
 # manage shape of points --------------------------------------------------
 
-# Initialize a vector to hold the shapes for each region
-shapes <- numeric(length(filtered_regions))
+# full list of region codes (46 of them)
+all_regions <- regions
 
-# vector to be replicated (9 values max)
-# numbers correspond to the shape numbers of ggplot
-# x = 7:18
-x = c(15:17, 4, 8, 9, 10, 14, 18)
+# a small pool of ggplot2 shapes (recycled to length 46)
+shape_pool <- c(15:17, 4, 8, 9, 10, 14, 18)
+region_shapes <- setNames(
+  rep(shape_pool, length.out = length(all_regions)),
+  all_regions
+)
 
-# For each macro-region, assign shapes and reset for each macro-region
-for (macro_region in names(macro_regions)) {
-  sub_regions <- macro_regions[[macro_region]]
-  shapes[which(filtered_regions %in% sub_regions)] <- rep(x, length.out = length(sub_regions))
-}
+# make sure df_merged will carry all levels
+df_merged$Region <- factor(df_merged$Region, levels = all_regions)
 
 df_merged <- df_merged %>%
   mutate(model_name = "Multi-model mean",
@@ -235,18 +235,17 @@ for(model in unique_models) {
     ) +
 
     scale_color_manual(
-      name = "IPCC WGI reference regions", # to share same legend, the two scale_*_manual need to have same name, labels and limits
-      labels = full_region_names[filtered_regions], # use full-length region names
-      limits = filtered_regions, # display regions in right order
-      values = region_colors, # Use the custom color vector
+      name   = "IPCC WGI reference regions",
+      labels = full_region_names,       # full lookup by name
+      values = region_colors            # your existing 46‐element named vector
     ) +
 
-    scale_shape_manual( # assign different shapes to different regions in each region group
-      name = "IPCC WGI reference regions",
-      labels = full_region_names[filtered_regions],
-      limits = filtered_regions, # display regions in right order
-      values = shapes
+    scale_shape_manual(
+      name   = "IPCC WGI reference regions",
+      labels = full_region_names,       # full lookup by name
+      values = region_shapes            # the new 46‐element named vector
     ) +
+
     guides(
       color = guide_legend(
         # title = "IPCC WGI reference regions",
@@ -281,7 +280,7 @@ all <- ggarrange(plotlist = plots_with_empty,
                  common.legend = TRUE, # have just one common legend
                  legend= "bottom")
 
-ggsave("IPCC_regions_water-lim.png", path = "./", width = 11, height = 4.7, dpi= 600) # width = 8, height = 15,
+ggsave("IPCC_regions_water-lim_daily.png", path = "./", width = 11, height = 4.7, dpi= 600) # width = 8, height = 15,
 
 
 

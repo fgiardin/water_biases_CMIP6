@@ -87,6 +87,9 @@ full_region_names <- c('GIC'  = 'Greenland/Iceland', 'NWN'  = 'N.W.North-America
 numbers <- 0:45
 df <- data.frame(ID = numbers, Region = regions)
 
+# for consistent mapping across all IPCC figures
+all_regions <- regions
+
 # merge to original IPCC df
 df_IPCC <- df_IPCC %>%
   left_join(df, by = join_by(ID)) %>%
@@ -124,8 +127,8 @@ unique_regions_in_data <- unique_regions_in_data[!unique_regions_in_data %in% c(
 # Filter the original region vector to include only those present in df_merged
 filtered_regions <- regions[regions %in% unique_regions_in_data]
 
-# Reorder the Region factor in df_merged according to the filtered_regions
-df_merged$Region <- factor(df_merged$Region, levels = filtered_regions)
+# make sure Region is a factor with all 46 levels (for consistency across all IPCC figures)
+df_merged$Region <- factor(df_merged$Region, levels = all_regions)
 
 
 # manage colors -----------------------------------------------------------
@@ -142,44 +145,37 @@ base_colors <- list(
 
 # sub-regions in order of appearance within each major region
 macro_regions <- list(
-  "North and Central America" = c('NWN', 'NEN', 'WNA', 'CNA', 'ENA', 'NCA', 'SCA', 'CAR'),
-  "South America" = c('NWS', 'NSA', 'NES', 'SAM', 'SWS', 'SES', 'SSA'),
-  "Europe" = c('NEU', 'WCE', 'EEU', 'MED'),
-  "Africa" = c('SAH', 'WAF', 'CAF', 'NEAF', 'SEAF', 'WSAF', 'ESAF', 'MDG'),
-  "Russia/Asia" = c('RAR', 'WSB', 'ESB', 'RFE', 'WCA', 'ECA', 'TIB', 'EAS', 'ARP', 'SAS'),
-  "Australia, New Zealand and South East Asia" = c('SEA', 'NAU', 'CAU', 'EAU', 'SAU', 'NZ')
+  "North and Central America" = c('NWN','NEN','WNA','CNA','ENA','NCA','SCA','CAR'),
+  "South America"             = c('NWS','NSA','NES','SAM','SWS','SES','SSA'),
+  "Europe"                    = c('NEU','WCE','EEU','MED'),
+  "Africa"                    = c('SAH','WAF','CAF','NEAF','SEAF','WSAF','ESAF','MDG'),
+  "Russia/Asia"               = c('RAR','WSB','ESB','RFE','WCA','ECA','TIB','EAS','ARP','SAS'),
+  "Australia, New Zealand and South East Asia" = c('SEA','NAU','CAU','EAU','SAU','NZ')
 )
-macro_regions <- lapply(macro_regions, intersect, filtered_regions) # only keep regions that appear in the final dataset
 
-# Assigning the base color to each sub-region within the macro regions
-region_colors <- unlist(lapply(names(macro_regions), function(region_name) {
-  setNames(rep(base_colors[[region_name]], length(macro_regions[[region_name]])), macro_regions[[region_name]])
+
+# Flatten into one named vector: region code → its colour
+region_colors <- unlist(lapply(names(macro_regions), function(mr) {
+  setNames(
+    rep(base_colors[[mr]], length(macro_regions[[mr]])),
+    macro_regions[[mr]]
+  )
 }))
-
-# Assign back the names of the regions
-names(region_colors) <- filtered_regions
+# region_colors now has length(all_regions) = 46, named by the codes
 
 
 # manage shape of points --------------------------------------------------
 
-# Initialize a vector to hold the shapes for each region
-shapes <- numeric(length(filtered_regions))
-
-# vector to be replicated (9 values max)
-# numbers correspond to the shape numbers of ggplot
-# x = 7:18
-x = c(15:17, 4, 8, 9, 10, 14, 18)
-
-# For each macro-region, assign shapes and reset for each macro-region
-for (macro_region in names(macro_regions)) {
-  sub_regions <- macro_regions[[macro_region]]
-  shapes[which(filtered_regions %in% sub_regions)] <- rep(x, length.out = length(sub_regions))
-}
+# a small palette of 9 ggplot2 shapes, recycled to cover all 46 regions
+shape_pool <- c(15:17, 4, 8, 9, 10, 14, 18)
+region_shapes <- setNames(
+  rep(shape_pool, length.out = length(all_regions)),
+  all_regions
+)
+# region_shapes is now a named vector length 46
 
 df_merged <- df_merged %>%
   drop_na()
-
-
 
 # scatter plots -----------------------------------------------------------
 
@@ -225,18 +221,17 @@ for(model in unique_models) {
     ) +
 
     scale_color_manual(
-      name = "IPCC WGI reference regions", # to share same legend, the two scale_*_manual need to have same name, labels and limits
-      labels = full_region_names[filtered_regions], # use full-length region names
-      limits = filtered_regions, # display regions in right order
-      values = region_colors, # Use the custom color vector
+      name   = "IPCC WGI reference regions",
+      labels = full_region_names,    # full lookup; ggplot only shows levels present
+      values = region_colors         # global 46‐element vector
     ) +
 
-    scale_shape_manual( # assign different shapes to different regions in each region group
-      name = "IPCC WGI reference regions",
-      labels = full_region_names[filtered_regions],
-      limits = filtered_regions, # display regions in right order
-      values = shapes
+    scale_shape_manual(
+      name   = "IPCC WGI reference regions",
+      labels = full_region_names,    # full lookup; ggplot only shows levels present
+      values = region_shapes         # global 46‐element vector
     ) +
+
     guides(
       color = guide_legend(
         # title = "IPCC WGI reference regions",
