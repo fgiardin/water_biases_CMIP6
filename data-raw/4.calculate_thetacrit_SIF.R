@@ -56,26 +56,35 @@ time(r) <- dates
 SIF_rast <- r
 # plot(SIF_rast[[1]])
 
+# *** beginning of updated resampling of land cover ***
 # Focus on vegetated land
 land_cover_raw <- rast("data-raw/landcover/landcover_MCD12C1.nc")
 land_cover <- flip(land_cover_raw[[1]], direction = "vertical")
 vegetated_land <- ifel(
   land_cover == 0,
-  NA,
+  0, # important: use zeros and not NAs here (important for averaging below!)
   ifel(
     land_cover == 13,
-    NA,
+    0,
     ifel(
       land_cover > 14,
-      NA,
+      0,
       1 # create binary mask (vegetation: yes or no?)
     )
   )
 )
-vegetated_land <- terra::resample(vegetated_land,
-                                  SIF_rast,
-                                  method = "near") # nearest neighbor (categorical variable)
-SIF_rast <- mask(SIF_rast, vegetated_land)
+
+vegetated_land <- round( # 2) ...and then round to 1 if >0.5 (vegetated land)
+  terra::resample( # 1) do average of 0-1 pixels first (while resampling)...
+    vegetated_land,
+    SIF_rast,
+    method = "average"))
+
+SIF_rast <- mask(SIF_rast,
+                 vegetated_land,
+                 maskvalues = 0) # indicate to the function that the mask value (indicates which cells should be masked) is 0 (default is NA)
+
+# *** end of updated resampling of land cover ***
 
 # only take data from 01/01/2007 to 01/12/2015 (9 full years)
 SIF_rast <- subset(SIF_rast, 1:108)
