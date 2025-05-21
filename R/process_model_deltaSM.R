@@ -27,24 +27,11 @@ process_model_deltaSM <- function(model_name, scenario) {
   # Rotate to true coordinates (-180;180 instead of 0;360)
   mrso_model <- terra::rotate(mrso_model)
 
-  # Focus on vegetated land
-  land_cover_raw <- rast("data-raw/landcover/landcover_MCD12C1.nc")
-  land_cover <- flip(land_cover_raw[[1]], direction = "vertical")
-  vegetated_land <- ifel(
-    land_cover == 0,
-    NA,
-    ifel(
-      land_cover == 13,
-      NA,
-      ifel(
-        land_cover > 14,
-        NA,
-        land_cover
-      )
-    )
-  )
-  vegetated_land <- resample(vegetated_land, mrso_model)
-  mrso_model <- mask(mrso_model, vegetated_land)
+  # apply land mask
+  vegetated_land <- readRDS("data/land_mask/vegetated_land_mask.rds")
+  mrso_model <- mask(mrso_model,
+                vegetated_land,
+                maskvalues = 0)
 
   # Transform to dataframe
   df_model <- terra::as.data.frame(mrso_model, xy = TRUE)

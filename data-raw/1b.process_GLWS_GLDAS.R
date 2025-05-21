@@ -1,5 +1,4 @@
-# script to put GLWS and GLDAS from Ryan in right format
-
+# script to put GLWS and GLDAS from preprocessing in right format
 
 ### load library and data
 library(tidyverse)
@@ -13,6 +12,7 @@ library(ncdf4)
 
 # load data prepared by Ryan --------------------------------------------------------
 GWLS_data <- readMat("data/Comparisons_GRACE/GWLS_2_0_ALWSC.mat")  # deltaSM already calculated
+
 GRACE_data <- readRDS("data/GRACE/summary_merged_deltaSM.rds") %>%
   dplyr::filter(model_name == "GRACE observations") %>%
   dplyr::select(lon, lat, deltaSMmax)
@@ -55,7 +55,6 @@ range(GLDAS_final$lon)  # Should match [-178.75, 178.75]
 GRACE_pixels <- GRACE_data %>%
   dplyr::select(lon, lat) %>%
   distinct()
-
 GLDAS_matched <- GLDAS_final %>%
   semi_join(GRACE_pixels, by = c("lon", "lat"))
 
