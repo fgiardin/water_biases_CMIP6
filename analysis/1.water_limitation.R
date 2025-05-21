@@ -1,4 +1,9 @@
-# script to plot frequency of SM limitation (multi-model mean) [Fig. 1] for GLWS instead of GRACE!
+# script to plot frequency of SM limitation (multi-model mean) [Fig. 1]
+# update to also plot comparison with historical data in a separate plot (supplementary figures)
+
+# data processing in following scripts:
+# GRACE/SIF data: data-raw/4.calculate_thetacrit_SIF.R
+# LMIP-CMIP6 data: data-raw/3.calculate_thetacrit_monthly.R
 
 # load packages
 library(tidyverse)
@@ -15,12 +20,12 @@ library(ggnewscale) # to add multiple scales in same ggplot
 library(ggpubr)
 sf_use_s2(FALSE) # switch off spherical geometry
 library(data.table)
+library(matrixStats) # to calculate median of bias
 library(RColorBrewer)
 setwd("/Users/fgiardina/water_biases_CMIP6")
 
 # load data
-df_count_GLDAS <- readRDS("data/Comparisons_GRACE/water_limitation/df_count_GLDAS.rds") %>%
-  # readRDS("data/theta_crit/monthly/df_count_GLDAS.rds") %>%
+df_count_GRACE <- readRDS("data/theta_crit/monthly/df_count_GRACE.rds") %>%
   dplyr::select(-date, -SIF, -TWS) %>%  # remove temporal values
   unique() %>%
   mutate(model = "Observations")
@@ -29,7 +34,7 @@ df_count_mrso <- readRDS("data/theta_crit/monthly/df_count_mrso_allscenarios.rds
   dplyr::select(-date, -EF, -Rn, -mrso, -mrso_norm) %>%
   unique()
 
-dt_count <- bind_rows(df_count_mrso, df_count_GLDAS) %>%
+dt_count <- bind_rows(df_count_mrso, df_count_GRACE) %>%
   rename(model_name = model) %>%
   mutate(count = count*100) %>%
   mutate(count = ifelse(Intercept < EFmax,
@@ -62,7 +67,7 @@ breaks <- seq(lower_threshold, upper_threshold, by = 10) # by = rounded_interval
 
 # create color palette
 colors_rdpu <- brewer.pal(9, "PuRd") # Get colors from the RdPu palette
-colors_rdpu <- colors_rdpu[2:9] # remove first color(s) as too close to white
+colors_rdpu <- colors_rdpu[2:9] # remove first color(s) as too close to white and last color as too dark in PDF format
 color_map <- colorRampPalette(colors_rdpu)(length(breaks)) # Interpolate to get the correct number of colors
 
 # download countries
@@ -76,7 +81,6 @@ ocean <- ne_download(
   type = "ocean",
   category = "physical",
   returnclass = "sf")
-
 
 # Sort the models alphabetically, keeping "Observations" first
 unique_models <- unique(dt_count$model_name) # Extract unique model names
@@ -100,13 +104,13 @@ MMmeans <- dt_count %>%
   ungroup() %>%
   mutate(model_name = "Multi-model mean") # add model name to mirror summary_deltaSM
 
-# bind rows to original dt (to add GLDAS for plotting panel)
+# bind rows to original dt (to add GRACE for plotting panel)
 dt_count_MMmeans <- dt_count %>%
   bind_rows(MMmeans)
 
-summary_merged <- full_join(dt_count_MMmeans, # remove GLDAS in the original dataframe to avoid repetitions
+summary_merged <- full_join(dt_count_MMmeans, # remove GRACE in the original dataframe to avoid repetitions
                             grace_data, by = join_by(lon, lat),
-                            suffix = c("", "_GLDAS")) # add GLDAS column just to calculate comparison stats below
+                            suffix = c("", "_GRACE")) # add GRACE column just to calculate comparison stats below
 
 # calculate WEIGHTS for the bias (to account for spherical coordinates)
 res <- 2.5 # resolution in degrees
@@ -127,10 +131,27 @@ saveRDS(summary_merged, "summary_merged_watlim.rds", compress = "xz")
 scenarios <- unique(summary_merged$scenario)
 scenarios <- scenarios[!is.na(scenarios)]  # Remove NA if any
 
-scenarios <- "land-hist" # manually force just land-clim for now
-
 # Create the list of panels to print
 model_list <- c("Observations", "Multi-model mean")
+
+# function for weighted median
+weighted_median <- function(x, w, na.rm = FALSE) {
+  if (na.rm) {
+    ok <- !(is.na(x) | is.na(w))
+    x <- x[ok]; w <- w[ok]
+  }
+  if (!length(x)) return(NA_real_)
+
+  o <- order(x)             # 1. sort the sample
+  x <- x[o]; w <- w[o]
+
+  cw <- cumsum(w) / sum(w)  # 2. cumulative weight ∈ [0,1]
+  idx <- which(cw >= 0.5)[1]# 3. first cell past 50 %
+  x[idx]                     # 4. that value *is* the weighted median
+}
+
+# list to collect the fraction of area affected by over/underestimation
+area_fraction_stats <- list()   # one element per scenario XXXX
 
 # Loop over each scenario
 for (scene in scenarios) {
@@ -154,34 +175,88 @@ for (scene in scenarios) {
     if (current_mdl != "Observations") {
 
       # Calculate R-squared
-      fit <- lm(count ~ count_GLDAS, data = df_model)
+      fit <- lm(count ~ count_GRACE, data = df_model)
       r_squared <- summary(fit)$r.squared
       r_squared_label <- bquote(italic(R)^2 == .(round(r_squared, 2)))
 
       # calculate abs(mean bias) using weights
       mean_bias_abs <- df_model %>%
-        filter(!is.na(count) & !is.na(count_GLDAS) & !is.na(weights)) %>% # manually remove NAs when using "sum" (num and den should have same number of elements)
-        mutate(mean_bias_abs = abs(count - count_GLDAS) * weights) %>%
+        filter(!is.na(count) & !is.na(count_GRACE) & !is.na(weights)) %>% # manually remove NAs when using "sum" (num and den should have same number of elements)
+        mutate(mean_bias_abs = abs(count - count_GRACE) * weights) %>%
         summarise(weighted_mean_bias_abs = sum(mean_bias_abs, na.rm = TRUE) / sum(weights), na.rm = TRUE) %>%
         pull(weighted_mean_bias_abs)
       mean_bias_abs_label <- bquote("|Bias|" == .(round(mean_bias_abs, 0)) * "%")
 
-      # calculate mean bias using weights
-      mean_bias <- df_model %>%
-        filter(!is.na(count) & !is.na(count_GLDAS) & !is.na(weights)) %>%
-        mutate(mean_bias = (count - count_GLDAS) * weights) %>%
+      # calculate mean bias (raw bias) using weights
+      mean_bias_int <- df_model %>% # save intermediary raw bias to calculate percentages below
+        filter(!is.na(count) & !is.na(count_GRACE) & !is.na(weights)) %>%
+        mutate(mean_bias = (count - count_GRACE) * weights)
+
+      mean_bias <- mean_bias_int %>%
         summarise(weighted_mean_bias = sum(mean_bias, na.rm = TRUE) / sum(weights), na.rm = TRUE) %>%
         pull(weighted_mean_bias)
       mean_bias_label <- bquote("Bias" == .(round(mean_bias, 0)) * "%")
 
+      # calculate %land affected by over and underestimation
+      raw_bias <- mean_bias_int$mean_bias
+      n_tot      <- length(raw_bias)
+      n_over     <- sum(raw_bias >  0, na.rm = TRUE)
+      n_under    <- sum(raw_bias <  0, na.rm = TRUE)
+
+      frac_df <- tibble(
+        scenario   = scene,
+        frac_over  = paste0(round(n_over  / n_tot * 100), "%"),
+        frac_under = paste0(round(n_under / n_tot * 100), "%")
+      )
+      print(frac_df)
+
+
       # bias focusing on tropics
-      mean_bias_tropics <- df_model %>%
+      mean_bias_tropics_int <- df_model %>%
         filter(lat >= -23 & lat <= 23) %>%
-        filter(!is.na(count) & !is.na(count_GLDAS) & !is.na(weights)) %>%
-        mutate(mean_bias = (count - count_GLDAS) * weights) %>%
+        filter(!is.na(count) & !is.na(count_GRACE) & !is.na(weights)) %>%
+        mutate(mean_bias = (count - count_GRACE) * weights)
+
+      mean_bias_tropics <- mean_bias_tropics_int %>%
         summarise(weighted_mean_bias = sum(mean_bias, na.rm = TRUE) / sum(weights, na.rm = TRUE)) %>%
         pull(weighted_mean_bias)
       mean_bias_tropics_label <- bquote(Bias[tropics] == .(round(mean_bias_tropics, 0)) * "%")
+
+      # calculate %land affected by over and underestimation **IN TROPICS**
+      raw_bias_tr <- mean_bias_tropics_int$mean_bias
+      n_tot_tr      <- length(raw_bias_tr)
+      n_over_tr    <- sum(raw_bias_tr >  0, na.rm = TRUE)
+      n_under_tr    <- sum(raw_bias_tr <  0, na.rm = TRUE)
+
+      frac_df_tropics <- tibble(
+        scenario   = scene,
+        frac_over_tropics  = paste0(round(n_over_tr  / n_tot_tr * 100), "%"),
+        frac_under_tropics = paste0(round(n_under_tr / n_tot_tr * 100), "%")
+      )
+      print(frac_df_tropics)
+
+     # median using weights
+      median_bias <- df_model %>%
+        filter(!is.na(count) & !is.na(count_GRACE) & !is.na(weights)) %>%
+        transmute(bias = count - count_GRACE, w = weights) %>%
+        summarise(weighted_median_bias = weighted_median(bias, w)) %>%
+        # mutate(bias = count - count_GRACE) %>%
+        # summarise(weighted_median_bias = weightedMedian(bias, w = weights, na.rm = TRUE)) %>%
+        pull(weighted_median_bias)
+      median_bias_label <- bquote("Median bias" == .(round(median_bias, 0)) * "%")
+      print(median_bias_label) # just print (not to overpopulate figure)
+
+      # median using weights: tropics
+      median_bias_tropics <- df_model %>%
+        filter(lat >= -23 & lat <= 23) %>%
+        filter(!is.na(count) & !is.na(count_GRACE) & !is.na(weights)) %>%
+        transmute(bias = count - count_GRACE, w = weights) %>%
+        summarise(weighted_median_bias = weighted_median(bias, w)) %>%
+        # mutate(bias = count - count_GRACE) %>%
+        # summarise(weighted_median_bias = weightedMedian(bias, w = weights, na.rm = TRUE)) %>%
+        pull(weighted_median_bias)
+      median_bias_tropics_label <- bquote("Median bias"[tropics] == .(round(median_bias_tropics, 0)) * "%")
+      print(median_bias_tropics_label)
     }
 
     # Plot global map for each model
@@ -236,16 +311,19 @@ for (scene in scenarios) {
     # more specific title rather than just "Observations"
     if(current_mdl == "Observations") {
       p <- p + labs(
-        title = "GOME-2 SIF and GLDAS_CLSM025_DA1_D")
+        title = "GOME-2 SIF and GRACE observations")
     }
 
     # add stats for models
     if(current_mdl != "Observations") {
       p <- p +
-        annotate("text", x = -175, y = -11, label = r_squared_label, hjust = 0, vjust = 0, size = 4.3) + # R2
-        annotate("text", x = -175, y = -25, label = mean_bias_label, hjust = 0, vjust = 0, size = 4.3) + # mean bias
-        annotate("text", x = -175, y = -40, label = mean_bias_tropics_label, hjust = 0, vjust = 0, size = 4.3) + # tropics
-        annotate("text", x = -175, y = -52, label = mean_bias_abs_label, hjust = 0, vjust = 0, size = 4.3) # abs(mean bias)
+        # annotate("text", x = -175, y = 11, label = r_squared_label, hjust = 0, vjust = 0, size = 3.8) + # R2
+        # annotate("text", x = -175, y = 0, label = median_bias_label, hjust = 0, vjust = 0, size = 3.8) + # median of bias
+        # annotate("text", x = -175, y = -13,  label = median_bias_tropics_label, hjust = 0, vjust = 0, size = 3.8) + # median of bias in the tropics
+        annotate("text", x = -175, y = -11, label = r_squared_label, hjust = 0, vjust = 0, size = 3.8) + # R2
+        annotate("text", x = -175, y = -25, label = mean_bias_label, hjust = 0, vjust = 0, size = 3.8) + # mean bias
+        annotate("text", x = -175, y = -40, label = mean_bias_tropics_label, hjust = 0, vjust = 0, size = 3.8) + # tropics
+        annotate("text", x = -175, y = -52, label = mean_bias_abs_label, hjust = 0, vjust = 0, size = 3.8) # abs(mean bias)
     }
 
     return(p)
@@ -261,9 +339,13 @@ for (scene in scenarios) {
   )
 
   # Define the filename based on the scenario
-  filename <- paste0("map_count_", scene, "_MMmean_GLDAS.png")
-  ggsave(filename, plot = all, path = "./", width = 12, height = 3.25, dpi = 300)
+  filename <- paste0("map_count_", scene, "_MMmean.pdf")
+  ggsave(filename,
+         plot = all,
+         device = cairo_pdf, # save in PDF vectographic format (for publishing!)
+         path = "./",
+         width = 12,
+         height = 3.25) # dpi = 400
 }
 
-saveRDS(plot_list, "plot_list_GLDAS.rds", compress = "xz")
 

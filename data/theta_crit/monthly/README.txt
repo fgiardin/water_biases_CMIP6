@@ -8,7 +8,8 @@ OLD:
 df_count_mrso.rds --> calculated with only 7 models in 2023!!! first version of the paper 
 
 
-*** current df_count_GRACE and df_count_mrso_allscenarios use averaging to decrease the resolution of a dataset to match CMIP6, and nearest neighbour if it's a categorical variable. Corrected from before where bilinear interpolation was used for everything (default method when using resampling)
+*** current df_count_GRACE and df_count_mrso_allscenarios use averaging to decrease the resolution of a dataset to match CMIP6, and average + 50% filter for landcover. 
+Corrected from before where bilinear interpolation was used for everything (default method when using resampling) --> these results are still in "grace counts with bilinear interp (old)"
 
 
 

@@ -56,36 +56,6 @@ time(r) <- dates
 SIF_rast <- r
 # plot(SIF_rast[[1]])
 
-# *** beginning of updated resampling of land cover ***
-# Focus on vegetated land
-land_cover_raw <- rast("data-raw/landcover/landcover_MCD12C1.nc")
-land_cover <- flip(land_cover_raw[[1]], direction = "vertical")
-vegetated_land <- ifel(
-  land_cover == 0,
-  0, # important: use zeros and not NAs here (important for averaging below!)
-  ifel(
-    land_cover == 13,
-    0,
-    ifel(
-      land_cover > 14,
-      0,
-      1 # create binary mask (vegetation: yes or no?)
-    )
-  )
-)
-
-vegetated_land <- round( # 2) ...and then round to 1 if >0.5 (vegetated land)
-  terra::resample( # 1) do average of 0-1 pixels first (while resampling)...
-    vegetated_land,
-    SIF_rast,
-    method = "average"))
-
-SIF_rast <- mask(SIF_rast,
-                 vegetated_land,
-                 maskvalues = 0) # indicate to the function that the mask value (indicates which cells should be masked) is 0 (default is NA)
-
-# *** end of updated resampling of land cover ***
-
 # only take data from 01/01/2007 to 01/12/2015 (9 full years)
 SIF_rast <- subset(SIF_rast, 1:108)
 
@@ -112,9 +82,15 @@ SIF_norm <- terra::resample(SIF_norm,
                             cmip6_world,
                             method="average")
 
+# apply land mask
+vegetated_land <- readRDS("data/land_mask/vegetated_land_mask.rds")
+SIF_masked <- mask(SIF_norm,
+                 vegetated_land,
+                 maskvalues = 0) # indicate to the function that the mask value (indicates which cells should be masked) is 0 (default is NA)
+
 # transform to dataframe for plotting and merging with other data
-df_SIF <- terra::as.data.frame(SIF_norm, xy = TRUE)
-dates <- terra::time(SIF_norm)
+df_SIF <- terra::as.data.frame(SIF_masked, xy = TRUE)
+dates <- terra::time(SIF_masked)
 names(df_SIF) <- c("lon", "lat", as.character(dates))
 
 # Pivot to long format
@@ -149,32 +125,6 @@ dates <- terra::time(GRACE_raw) # monthly data 2002-2023
 # rotate to true coordinates (-180;180 instead of 0;360)
 GRACE <- terra::rotate(GRACE_raw)
 
-# focus on vegetated land
-land_cover_raw <- rast("data-raw/landcover/landcover_MCD12C1.nc") # load land cover
-land_cover <- flip(land_cover_raw[[1]], # select correct layer
-                   direction="vertical") # flip it vertically
-vegetated_land <- ifel( # only keep vegetated land
-  land_cover == 0,
-  NA,
-  ifel(
-    land_cover == 13, # 13 = Urban and Built-up Lands
-    NA,
-    ifel(
-      land_cover > 14, # 14 = Cropland/Natural Vegetation Mosaics (keep)
-      NA,              # 15 = Permanent Snow and Ice, 16 = Barren
-      1
-    )
-  )
-)
-vegetated_land <- terra::resample(vegetated_land, # resample land_cover to match GRACE
-                                  GRACE,
-                                  method = "near") # nearest neighbor
-
-GRACE <- mask(GRACE, vegetated_land) # remove all pixels that are NAs in land_cover
-# GRACE
-# plot(GRACE[[1]])
-# plot(vegetated_land)
-
 # normalize TWS by location (to compare it with flux SM)
 GRACEmax <- max(GRACE, na.rm = TRUE)
 GRACEmin <- min(GRACE, na.rm = TRUE)
@@ -189,9 +139,16 @@ GRACE_final <- terra::resample(GRACE_final,
                                P[[1]],
                                method = "average") # calculating the average instead of bilinear interpolation since we're decreasing the resolution!!
 
+# apply land mask
+vegetated_land <- readRDS("data/land_mask/vegetated_land_mask.rds")
+GRACE_masked <- mask(GRACE_final,
+                   vegetated_land,
+                   maskvalues = 0) # indicate to the function that the mask value (indicates which cells should be masked) is 0 (default is NA)
+
+
 # transform to dataframe
-df_GRACE <- terra::as.data.frame(GRACE_final, xy = TRUE) # xy =TRUE keeps the spatial coordinates
-dates <- terra::time(GRACE_final)
+df_GRACE <- terra::as.data.frame(GRACE_masked, xy = TRUE) # xy =TRUE keeps the spatial coordinates
+dates <- terra::time(GRACE_masked)
 
 names(df_GRACE) <- c("lon", "lat", as.character(dates))
 

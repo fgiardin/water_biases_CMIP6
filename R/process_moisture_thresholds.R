@@ -37,25 +37,11 @@ process_moisture_thresholds <- function(model_name, scenario) {
     data_model <- terra::rotate(data_model)
 
     # Focus on vegetated land
-    land_cover_raw <- rast("data-raw/landcover/landcover_MCD12C1.nc")
-    land_cover <- flip(land_cover_raw[[1]], direction = "vertical")
-    vegetated_land <- ifel(
-      land_cover == 0,
-      NA,
-      ifel(
-        land_cover == 13,
-        NA,
-        ifel(
-          land_cover > 14,
-          NA,
-          1
-        )
-      )
-    )
-    vegetated_land <- resample(vegetated_land,
-                               data_model,
-                               method = "near") # nearest neighbor (categorical variable)
-    data_model <- mask(data_model, vegetated_land)
+    vegetated_land <- readRDS("data/land_mask/vegetated_land_mask.rds")
+    data_model <- mask(
+        data_model,
+        vegetated_land,
+        maskvalues = 0)
 
     # Store the processed data
     data_list[[variable]] <- data_model

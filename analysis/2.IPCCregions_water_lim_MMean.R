@@ -6,6 +6,8 @@ library(tidyverse)
 library(terra)
 library(ggpubr)
 library(data.table)
+library(sf)
+library(rnaturalearth)
 
 # load plot data
 df_count_GRACE <- readRDS("data/theta_crit/monthly/df_count_GRACE.rds") %>%
@@ -100,7 +102,7 @@ df_plot <- dt_count %>%
   left_join(df_IPCC, by = join_by(lon, lat)) %>%
   # drop_na() %>%
   group_by(Region, model_name) %>% # in every IPCC cell and per every model, calculate mean/median count
-  # dplyr::filter(n() >= 10) %>% # only retain Regions with values from at least 10 grid cells
+  dplyr::filter(n() >= 10) %>% # only retain Regions with values from at least 10 grid cells
   summarise(median_count = mean(count, na.rm = TRUE)) %>%
   ungroup()
 
@@ -120,10 +122,6 @@ unique_models <- unique(df_merged$model_name)
 # Extract unique regions from df_merged
 unique_regions_in_data <- unique(df_merged$Region)
 
-# manually remove Sahara and Arabian Peninsula because not vegetated
-# they're not removed automatically in previous step because there still are very few pixels in those areas
-unique_regions_in_data <- unique_regions_in_data[!unique_regions_in_data %in% c("SAH", "ARP")]
-
 # Filter the original region vector to include only those present in df_merged
 filtered_regions <- regions[regions %in% unique_regions_in_data]
 
@@ -140,7 +138,7 @@ base_colors <- list(
   "Africa"                    = "#CD3333", # DarkRed
   "Europe"                    = "#FFD700", # Gold
   "Russia/Asia"               = "#BF3EFF", # Purple
-  "Australia, New Zealand and South East Asia" = "#FF7F00" # Orange
+  "Australia, New Zealand and South Asia" = "#FF7F00" # Orange
 )
 
 # sub-regions in order of appearance within each major region
@@ -149,9 +147,11 @@ macro_regions <- list(
   "South America"             = c('NWS','NSA','NES','SAM','SWS','SES','SSA'),
   "Europe"                    = c('NEU','WCE','EEU','MED'),
   "Africa"                    = c('SAH','WAF','CAF','NEAF','SEAF','WSAF','ESAF','MDG'),
-  "Russia/Asia"               = c('RAR','WSB','ESB','RFE','WCA','ECA','TIB','EAS','ARP','SAS'),
-  "Australia, New Zealand and South East Asia" = c('SEA','NAU','CAU','EAU','SAU','NZ')
+  "Russia/Asia"               = c('RAR','WSB','ESB','RFE','WCA','ECA','TIB','EAS','ARP'),
+  "Australia, New Zealand and South Asia" = c('SAS', 'SEA','NAU','CAU','EAU','SAU','NZ')
 )
+# important! max 9 regions per group, otherwise the symbols will repeat
+# (only 9 symbols defined below)
 
 
 # Flatten into one named vector: region code → its colour
@@ -175,7 +175,9 @@ region_shapes <- setNames(
 # region_shapes is now a named vector length 46
 
 df_merged <- df_merged %>%
+  dplyr::filter(model_name == "Multi-model mean") %>%
   drop_na()
+# SCREENSHOT OF df_merged HERE
 
 # scatter plots -----------------------------------------------------------
 
@@ -250,30 +252,100 @@ for(model in unique_models) {
 }
 
 # calculate distance from 1:1 line
-
 df_merged <- df_merged %>%
   filter(model_name == "Multi-model mean") %>%
   mutate(distance_from_1to1 = (median_count - median_count_obs) / sqrt(2))
 
-# save plot
-empty_plot <- ggplot() + # add letter to empty space in plot
-  theme_void() +
-  ggtitle("")  # remove any default title
-plots_with_empty <- c(plots, list(empty_plot))
 
-all <- ggarrange(plotlist = plots_with_empty,
+# IPCC regions plot -------------------------------------------------------
+
+# Read in the ATLAS reference‐regions shapefile:
+IPCC_shp <- st_read("data-raw/IPCC_regions/shapefile/IPCC-WGI-reference-regions-v4.shp")
+
+# Grab a world basemap
+world <- ne_countries(scale = "medium", returnclass = "sf")
+land_outline <- st_union(world)
+
+# acronyms to rotate
+rot_labels <- c("NWS", "SWS", "WSAF", "ESAF")
+IPCC_shp <- IPCC_shp %>%
+  mutate(angle = ifelse(Acronym %in% rot_labels, 90, 0))
+
+# Plot
+IPCC_fig <- ggplot() +
+  # land, no country borders
+  geom_sf(data   = land_outline,
+          fill   = "grey90",
+          colour = "white") +
+
+  # atlas rectangles
+  geom_sf(data   = IPCC_shp,
+          fill   = NA,
+          colour = "black",
+          size   = 0.4) +
+
+  # white “halo” around acronym
+  geom_sf_text(
+    data     = filter(IPCC_shp, Acronym %in% regions),
+    aes(label = Acronym, angle = angle),
+    size     = 3.1,
+    fontface = "bold",
+    colour   = "white"
+  ) +
+  # black text on top
+  geom_sf_text(
+    data     = filter(IPCC_shp, Acronym %in% regions),
+    aes(label = Acronym, angle = angle),
+    size     = 3,
+    fontface = "bold",
+    colour   = "black"
+  ) +
+
+  # same cropping you use in your model panels
+  coord_sf(
+    xlim   = c(-179.999, 179.999),
+    ylim   = c(-60, 88),
+    expand = FALSE
+  ) +
+
+  # drop axes/legends, pale blue ocean, add a thin black frame
+  theme_void() +
+  theme(
+    panel.background = element_rect(fill   = "#DDF4FE",  # pale ocean blue
+                                    colour = NA),
+    panel.border     = element_rect(fill   = NA,
+                                    colour = "black",
+                                    size   = 0.6),
+    plot.margin = unit(c(top = 0,
+                         right = 0.1,   # add space on the right for final plot
+                         bottom = 0,
+                         left = 0),
+                       "cm")
+  )
+
+
+
+# merge and save plot ---------------------------------------------------------------
+
+plots_all <- c(plots, list(IPCC_fig))
+
+all <- ggarrange(plotlist = plots_all,
                  labels = "auto",
-                 ncol = 3, nrow = 1,
+                 ncol = 2, nrow = 1,
+                 widths        = c(1.1, 2), # arrange plots (relative units)
                  common.legend = TRUE, # have just one common legend
                  legend= "bottom")
 
-ggsave("IPCC_regions_water-lim.png", path = "./", width = 11, height = 6, dpi= 600) # width = 8, height = 15,
+ggsave("IPCC_regions_water-lim.pdf",
+       plot = all,
+       device = cairo_pdf,
+       path = "./",
+       width = 11,
+       height = 6) # width = 11, height = 6,
 
 
-# original phrasing in text
-# The most affected include the Congo rainforest (CAF) and Southern Africa (WSAF, ESAF),
-# Australia (SAU, EAU, CAU), the Amazon (NWS, NSA, SAM) and the Southern Cone (SSA, SWS),
-# and also Eastern Central Asia (ECA) (Fig. 2).
+
+
 
 
 
