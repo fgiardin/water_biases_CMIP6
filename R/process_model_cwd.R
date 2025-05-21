@@ -52,23 +52,11 @@ process_model_cwd <- function(model_name, scenario_type) {
   water_balance <- terra::rotate(water_balance)
 
   # Focus on vegetated land
-  land_cover_raw <- rast("data-raw/landcover/landcover_MCD12C1.nc")
-  land_cover <- flip(land_cover_raw[[1]], direction = "vertical")
-  vegetated_land <- ifel(
-    land_cover == 0,
-    NA,
-    ifel(
-      land_cover == 13,  # Urban and Built-up Lands
-      NA,
-      ifel(
-        land_cover > 14,  # Permanent Snow and Ice, Barren
-        NA,
-        land_cover
-      )
-    )
-  )
-  vegetated_land <- resample(vegetated_land, water_balance)
-  water_balance <- mask(water_balance, vegetated_land)
+  vegetated_land <- readRDS("data/land_mask/vegetated_land_mask.rds")
+  water_balance <- mask(
+    water_balance,
+    vegetated_land,
+    maskvalues = 0)
 
   # Transform to dataframe
   df_wb <- terra::as.data.frame(water_balance, xy = TRUE)

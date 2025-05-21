@@ -338,14 +338,23 @@ for (scene in scenarios) {
     legend = "bottom"
   )
 
-  # Define the filename based on the scenario
-  filename <- paste0("map_count_", scene, "_MMmean.pdf")
+  # print in png
+  filename <- paste0("map_watlim_", scene, "_MMmean.png")
   ggsave(filename,
          plot = all,
-         device = cairo_pdf, # save in PDF vectographic format (for publishing!)
          path = "./",
          width = 12,
-         height = 3.25) # dpi = 400
+         height = 3.25,
+         dpi = 300)
+
+  # print in PDF
+  filename <- paste0("map_watlim_", scene, "_MMmean.pdf")
+  ggsave(filename,
+         plot = all,
+         device = cairo_pdf, # save in PDF vectographic format (for publishing)
+         path = "./",
+         width = 12,
+         height = 3.25)
 }
 
 

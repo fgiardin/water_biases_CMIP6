@@ -140,7 +140,7 @@ GRACE_final <- terra::resample(GRACE_final,
                                method = "average") # calculating the average instead of bilinear interpolation since we're decreasing the resolution!!
 
 # apply land mask
-vegetated_land <- readRDS("data/land_mask/vegetated_land_mask.rds")
+vegetated_land <- readRDS("data/land_mask/vegetated_land_mask.rds") # already in the same grid as CMIP6!!
 GRACE_masked <- mask(GRACE_final,
                    vegetated_land,
                    maskvalues = 0) # indicate to the function that the mask value (indicates which cells should be masked) is 0 (default is NA)

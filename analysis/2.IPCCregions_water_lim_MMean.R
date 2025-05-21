@@ -275,8 +275,9 @@ IPCC_shp <- IPCC_shp %>%
 IPCC_fig <- ggplot() +
   # land, no country borders
   geom_sf(data   = land_outline,
-          fill   = "grey90",
-          colour = "white") +
+          colour = "#D9D9D9",
+          # fill   = "#D9D9D9"
+          ) +
 
   # atlas rectangles
   geom_sf(data   = IPCC_shp,
@@ -288,9 +289,9 @@ IPCC_fig <- ggplot() +
   geom_sf_text(
     data     = filter(IPCC_shp, Acronym %in% regions),
     aes(label = Acronym, angle = angle),
-    size     = 3.1,
+    size     = 3.15,
     fontface = "bold",
-    colour   = "white"
+    colour   = "gray98"
   ) +
   # black text on top
   geom_sf_text(
@@ -316,13 +317,11 @@ IPCC_fig <- ggplot() +
     panel.border     = element_rect(fill   = NA,
                                     colour = "black",
                                     size   = 0.6),
-    plot.margin = unit(c(top = 0,
-                         right = 0.1,   # add space on the right for final plot
-                         bottom = 0,
-                         left = 0),
-                       "cm")
-  )
-
+    plot.margin = unit(c(top = 0.7, # control margins
+                         right = 0.6,
+                         bottom = 0.82,
+                         left = 0.6),
+                       "cm"))
 
 
 # merge and save plot ---------------------------------------------------------------
@@ -336,12 +335,25 @@ all <- ggarrange(plotlist = plots_all,
                  common.legend = TRUE, # have just one common legend
                  legend= "bottom")
 
+# save in png
+ggsave("IPCC_regions_water-lim.png",
+       plot = all,
+       path = "./",
+       width = 11,
+       height = 6,
+       dpi = 300) # width = 11, height = 6,
+
+# save in PDF
 ggsave("IPCC_regions_water-lim.pdf",
        plot = all,
        device = cairo_pdf,
        path = "./",
        width = 11,
        height = 6) # width = 11, height = 6,
+
+
+
+
 
 
 

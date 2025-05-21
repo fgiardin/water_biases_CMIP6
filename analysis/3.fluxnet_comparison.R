@@ -11,7 +11,6 @@ library(patchwork)
 library(ragg) # to save plots with a lot of points faster
 library(cowplot)
 
-
 # load daily data
 df_daily_cmip6 <- readRDS("data/theta_crit/cmip6_daily_theta_crit_count.rds") %>%
   # EF must drop of at least 30%, otherwise we consider no water limitation (see Methods)
@@ -119,7 +118,7 @@ models_plot <- ggplot() +
 
 # Combine the two plots into one row
 title_row <- obs_plot + models_plot +
-  plot_layout(ncol = 2, widths = c(1.3, 4)) # ensure proportions with the rest of the plot
+  plot_layout(ncol = 2, widths = c(1.385, 4)) # ensure proportions with the rest of the plot
 title_row
 
 ### Combine the title row and the main grid using cowplot
@@ -140,9 +139,23 @@ final_with_axis <- ggdraw(final_plot_no_axis, clip = "off") +  # Use ggdraw() to
   draw_label("Evaporative Fraction (-)", x = 0.01, y = 0.5, hjust = 0.5, angle = 90, size = 18)
 
 
-ggsave("EFvsSM_sites.png", plot = final_with_axis, device = agg_png, width = 14, height = 8.7, dpi = 300) # width = 15, height = 9.2
+# save in PDF
+ggsave("EFvsSM_sites.pdf",
+       plot = final_with_axis,
+       device = cairo_pdf, # save in PDF vectographic format (for publishing)
+       path = "./",
+       width = 14,
+       height = 8.7) # width = 14, height = 8.7
 
-# ggsave("EFvsSM_sites.png", path = "./", width = 18, height = 10.8, dpi= 300)
+# save in png
+ggsave("EFvsSM_sites.png",
+       plot = final_with_axis,
+       dpi = 300,
+       path = "./",
+       width = 14,
+       height = 8.7) # width = 14, height = 8.7
+
+
 
 
 
