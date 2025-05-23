@@ -97,10 +97,10 @@ df_IPCC <- df_IPCC %>%
   left_join(df, by = join_by(ID)) %>%
   dplyr::filter(ID > 0)
 
-# merge to count df
+# merge to count df and calculate mean by IPCC region
 df_plot <- dt_count %>%
   left_join(df_IPCC, by = join_by(lon, lat)) %>%
-  # drop_na() %>%
+  drop_na() %>%
   group_by(Region, model_name) %>% # in every IPCC cell and per every model, calculate mean/median count
   dplyr::filter(n() >= 10) %>% # only retain Regions with values from at least 10 grid cells
   summarise(median_count = mean(count, na.rm = TRUE)) %>%
@@ -273,6 +273,7 @@ IPCC_shp <- IPCC_shp %>%
 
 # Plot
 IPCC_fig <- ggplot() +
+
   # land, no country borders
   geom_sf(data   = land_outline,
           colour = "#D9D9D9",

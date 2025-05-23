@@ -10,8 +10,8 @@ library(scales)
 
 # load and prepare data ---------------------------------------------------
 
-# load SM data
-summary_cwd <- readRDS("data/CWD/max_CWD/summary_maxCWD_MMmean.rds") %>%
+# load CWD data
+summary_cwd <- readRDS("data/CWD/max_CWD/summary_maxCWD_MMmean.rds") %>% # from script 4.CWD_ALEX_MMean_hist.R
   dplyr::rename(model_name = model) %>%
   dplyr::select(-weights) %>%
   filter(scenario != "historical") %>%
@@ -25,9 +25,6 @@ obs_rows <- summary_cwd %>%
 
 # Append these rows to the original dataset
 summary_cwd <- bind_rows(summary_cwd, obs_rows)
-
-summary_cwd_old <- readRDS("data/CWD/max_CWD/old/summary_maxCWD_MMmean_old.rds")
-
 
 
 # load IPCC data
@@ -69,11 +66,12 @@ df_IPCC <- df_IPCC %>%
   left_join(df, by = join_by(ID)) %>%
   dplyr::filter(ID > 0)
 
-# merge to max_cwd
+# merge to max_cwd and calculate mean by IPCC region
 df_plot <- summary_cwd %>%
   left_join(df_IPCC, by = join_by(lon, lat)) %>%
   drop_na() %>%
   group_by(Region, model_name) %>% # in every IPCC cell and per every model, calculate median max_cwd
+  dplyr::filter(n() >= 10) %>% # only retain Regions with values from at least 10 grid cells
   summarise(mean_cwd = mean(max_cwd, na.rm = TRUE)) %>% # mean cwd within IPCC region
   ungroup()
 
@@ -228,6 +226,9 @@ empty_plot <- ggplot() +
   theme_void() +
   ggtitle("")  # remove any default title
 plots_with_empty <- c(plots, list(empty_plot))
+
+
+
 
 all <- ggarrange(plotlist = plots_with_empty,
                  labels = "auto",

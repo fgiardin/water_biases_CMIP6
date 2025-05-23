@@ -24,6 +24,11 @@ library(matrixStats) # to calculate median of bias
 library(RColorBrewer)
 setwd("/Users/fgiardina/water_biases_CMIP6")
 
+# *** select scenario ***
+# !!! important do one scenario at a time!
+scenario_select = "historical"
+# either "land-hist" or "historical"
+
 # load data
 df_count_GRACE <- readRDS("data/theta_crit/monthly/df_count_GRACE.rds") %>%
   dplyr::select(-date, -SIF, -TWS) %>%  # remove temporal values
@@ -32,6 +37,7 @@ df_count_GRACE <- readRDS("data/theta_crit/monthly/df_count_GRACE.rds") %>%
 
 df_count_mrso <- readRDS("data/theta_crit/monthly/df_count_mrso_allscenarios.rds") %>%
   dplyr::select(-date, -EF, -Rn, -mrso, -mrso_norm) %>%
+  dplyr::filter(scenario == scenario_select) %>% # select scenario
   unique()
 
 dt_count <- bind_rows(df_count_mrso, df_count_GRACE) %>%

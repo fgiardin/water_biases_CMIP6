@@ -70,10 +70,6 @@ colors_rdpu <- brewer.pal(9, "PuRd") # Get colors from the RdPu palette
 colors_rdpu <- colors_rdpu[2:9] # remove first color(s) as too close to white
 color_map <- colorRampPalette(colors_rdpu)(length(breaks)) # Interpolate to get the correct number of colors
 
-# assign same color to values above/below threshold (to ensure that the structure of the data is highlighted properly)
-dt_count[[plot_variable]][dt_count[[plot_variable]] > upper_threshold] <- upper_threshold
-dt_count[[plot_variable]][dt_count[[plot_variable]] < lower_threshold] <- lower_threshold
-
 # download countries
 countries <- ne_countries(scale = 50, returnclass = c("sf"))
 

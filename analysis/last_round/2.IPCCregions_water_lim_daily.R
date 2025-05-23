@@ -97,7 +97,7 @@ df_plot <- df_count_flux_models %>%
 
   # remove regions that had just one match with flux site (too low representativeness)
   group_by(Region) %>%        # for each region …
-  filter(n() > 2) %>%         # … only keep it if it has more than 2 rows …
+  filter(n() > 2) %>%         # … only keep it if it has more than 2 rows (i.e. at least 2 flux towers)
   ungroup() %>%
 
   # then calculate mean within each grid cell
