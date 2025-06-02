@@ -2,6 +2,7 @@
 
 library(ggplot2)
 library(dplyr)
+library(ggrastr)
 
 plot_flux <- function(df, site_name, show_x = TRUE, show_y = TRUE) {
 
@@ -9,7 +10,10 @@ plot_flux <- function(df, site_name, show_x = TRUE, show_y = TRUE) {
     filter(sitename == site_name)
 
   p <- ggplot(df_site, aes(x = SM, y = EF)) +
-    geom_point(alpha = 0.153, size = 0.5) + # alpha = 0.23, size = 1.5
+    geom_point_rast(alpha = 0.153,
+                    size = 0.5,
+                    raster.dpi = 600  # rasterize to avoid crash because of too many points
+                    ) +
     theme_minimal() +
     theme(
       axis.text.x = if(show_x) element_text(size = 14) else element_blank(),
@@ -53,22 +57,42 @@ plot_flux <- function(df, site_name, show_x = TRUE, show_y = TRUE) {
   }
 
   if ("count" %in% names(df_site)) {
-    count_value <- round(df_site$count * 100, 2)  # Round and transform to percentage
 
-    # Use ifelse to check for NA and adjust the label accordingly
+    # one value per site (first non-NA is fine)
+    count_value <- df_site |>
+      summarise(count = unique(na.omit(count))[1]) |>
+      pull(count)
+
     label_text <- ifelse(is.na(count_value),
                          "Water limitation: NA",
-                         paste0("Water limitation: ", count_value, "%"))
+                         sprintf("Water limitation: %.0f%%", round(count_value * 100, 0)))
 
     p <- p +
-      annotate("label", x = 0.5, y = 1.45, label = label_text,
-               hjust = 0.5, # Center text
-               vjust = 0.5,
-               size = 4.6, color = "black",
-               fill = "white",
-               label.size = 0.5,
-               label.r = unit(0.15, "lines"))
+      geom_label(
+        data = tibble(x = 0.5, y = 1.45, label = label_text),  # one-row data frame
+        aes(x, y, label = label),
+        size = 4.6, label.size = 0.5, label.r = unit(0.15, "lines"),
+        fill = "white"
+      )
   }
+
+  # if ("count" %in% names(df_site)) {
+  #   count_value <- round(df_site$count * 100, 2)  # Round and transform to percentage
+  #
+  #   # Use ifelse to check for NA and adjust the label accordingly
+  #   label_text <- ifelse(is.na(count_value),
+  #                        "Water limitation: NA",
+  #                        paste0("Water limitation: ", count_value, "%"))
+  #
+  #   p <- p +
+  #     annotate("label", x = 0.5, y = 1.45, label = label_text,
+  #              hjust = 0.5, # Center text
+  #              vjust = 0.5,
+  #              size = 4.6, color = "black",
+  #              fill = "white",
+  #              label.size = 0.5,
+  #              label.r = unit(0.15, "lines"))
+  # }
 
   return(p)
 }

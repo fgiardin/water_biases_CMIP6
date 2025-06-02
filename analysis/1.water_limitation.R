@@ -26,7 +26,7 @@ setwd("/Users/fgiardina/water_biases_CMIP6")
 
 # *** select scenario ***
 # !!! important do one scenario at a time!
-scenario_select = "historical"
+scenario_select = "land-hist"
 # either "land-hist" or "historical"
 
 # load data
