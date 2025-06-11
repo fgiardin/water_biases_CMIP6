@@ -4,7 +4,7 @@ process_scenario_data <- function(summary_deltaSM_scenario, grace_data, scenario
   # Assign same color to points above upper threshold
   summary_deltaSM_scenario[[plot_variable]][summary_deltaSM_scenario[[plot_variable]] > upper_threshold] <- upper_threshold
 
-  # Include GRACE data in summary_deltaSM_scenario
+  # include GRACE data in summary_deltaSM_scenario
   grace_data_capped <- grace_data
   grace_data_capped[[plot_variable]][grace_data_capped[[plot_variable]] > upper_threshold] <- upper_threshold
 

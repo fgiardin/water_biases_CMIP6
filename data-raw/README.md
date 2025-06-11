@@ -1,1 +1,1 @@
-Scripts used to process the data from scratch. Unfortunately some raw datasets are to big to be uplaoded on this repo. Follow the instructions in the "Data availability" section of the published manuscript to download them. 
+Scripts used to process the data from scratch. Some raw datasets are too big to be uplaoded on this repo. Follow the instructions in the "Data availability" section of the published manuscript to download them. 

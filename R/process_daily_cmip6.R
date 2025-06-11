@@ -1,4 +1,3 @@
-
 # function to extract Rn, EF and SM from .mat files and create a long datatable for plotting
 
 # df_key must be loaded in the R environment
