@@ -1,8 +1,6 @@
 # script to calculate deltaSM for every year in every grid cell and
 # then take the maximum deltaSM over the entire period
 
-## !!! may need to update to Future/Furrr libraries instead of parallel
-
 # the code was run in parallel on a local machine, but can be also run on a HPC
 # given the size of the raw data, we didn't upload it on this repo.
 # please refer to the "Data availability statement" in the paper to download the data
