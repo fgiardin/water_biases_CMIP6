@@ -1,9 +1,12 @@
-Folder containing the scripts to generate all figures and analysis. Each script produces a figure. 
+Folder containing scripts to generate all figures present in the main text. Each script produces a figure. 
+The subfolder 'SI' contains scripts to plot all figures present in the Supplementary Information. 
 
-* **1.global-maps**: Contains scripts to plot all global maps (including Figs. 1 and 3)
+* **Fig_1_water_limitation.R**: script to plot Fig. 1 "Global maps of frequency of water limitation" and Fig. S3. 
 
-* **2.IPCC-regions**: Contains scripts to plot all our results grouped by IPCC regions (including Fig. 2)
+* **Fig_2_IPCCregions_water_lim_MMean.R**: script to plot Fig. 2 "Comparison of the frequency of water limitation across different IPCC regions based on LMIP-CMIP6 model simulations and observations". 
 
-* **3.eddy-covariance**: Contains scripts to plot figures at the site-level, using FLUXNET2015 data (including Fig. 4)
+* **Fig_3_fluxnet_comparison.R**: script to plot Fig. 3 "Analysis of water limitation at three selected eddy-covariance sites". 
+
+* **Fig_4_CWD_ALEXI_MMean_hist.R**: script to plot Fig. 4 "Comparison of active land water storage capacity (ALWSC) from LMIP-CMIP6 simulations against observations-based estimates" and Fig. S7. 
 
 
